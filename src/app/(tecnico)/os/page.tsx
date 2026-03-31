@@ -13,6 +13,7 @@ import Link from 'next/link'
 interface OsData {
   ordens: OrdemServico[]
   preenchidas: Set<string>
+  enviadas: Set<string>
   cidadeMap: Record<string, string>
   enviadasCount: number
 }
@@ -41,12 +42,13 @@ async function fetchOsData(nome: string): Promise<OsData> {
   })
 
   let preenchidas = new Set<string>()
+  let enviadas = new Set<string>()
   let cidadeMap: Record<string, string> = {}
 
   if (todas.length > 0) {
     const ids = todas.map(o => o.Id_Ordem)
     const [preenchRes, cliRes] = await Promise.all([
-      supabase.from('Ordem_Servico_Tecnicos').select('Ordem_Servico').in('Ordem_Servico', ids),
+      supabase.from('Ordem_Servico_Tecnicos').select('Ordem_Servico, Status').in('Ordem_Servico', ids),
       (() => {
         const cnpjs = [...new Set(todas.map(o => o.Cnpj_Cliente).filter(Boolean))]
         return cnpjs.length > 0
@@ -56,6 +58,7 @@ async function fetchOsData(nome: string): Promise<OsData> {
     ])
     if (preenchRes.data) {
       preenchidas = new Set(preenchRes.data.map((p: { Ordem_Servico: string }) => p.Ordem_Servico))
+      enviadas = new Set(preenchRes.data.filter((p: { Status: string }) => p.Status === 'enviado').map((p: { Ordem_Servico: string }) => p.Ordem_Servico))
     }
     if (cliRes.data) {
       cliRes.data.forEach((c: { cnpj_cpf: string; cidade: string | null }) => {
@@ -64,7 +67,7 @@ async function fetchOsData(nome: string): Promise<OsData> {
     }
   }
 
-  return { ordens, preenchidas, cidadeMap, enviadasCount: envRes.count || 0 }
+  return { ordens, preenchidas, enviadas, cidadeMap, enviadasCount: envRes.count || 0 }
 }
 
 export default function OrdensHub() {
@@ -142,7 +145,9 @@ export default function OrdensHub() {
     setBuscando(false)
   }
 
-  const { ordens = [], preenchidas = new Set<string>(), cidadeMap = {}, enviadasCount = 0 } = data || {}
+  const { ordens: ordensRaw = [], preenchidas = new Set<string>(), enviadas = new Set<string>(), cidadeMap = {}, enviadasCount = 0 } = data || {}
+  // Filtrar: não mostrar OS já enviadas na aba Preencher
+  const ordens = ordensRaw.filter(o => !enviadas.has(o.Id_Ordem))
 
   const hoje = new Date().toISOString().split('T')[0]
   const atrasadas = ordens.filter(o => {

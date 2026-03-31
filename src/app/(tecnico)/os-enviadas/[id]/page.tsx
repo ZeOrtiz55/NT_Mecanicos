@@ -4,7 +4,7 @@ import { use } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { supabase } from '@/lib/supabase'
 import { gerarPdfRelatorio } from '@/lib/gerarPdfRelatorio'
-import { ArrowLeft, FileDown, Eye, Loader2 } from 'lucide-react'
+import { ArrowLeft, FileDown, Eye, Loader2, FileEdit, Send, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 
 interface PecaInfo {
@@ -28,6 +28,10 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
   const [osInfo, setOsInfo] = useState<Record<string, unknown> | null>(null)
   const [cidade, setCidade] = useState('')
   const [pecas, setPecas] = useState<PecaInfo[]>([])
+  const [cartaCorrecao, setCartaCorrecao] = useState('')
+  const [cartaSalva, setCartaSalva] = useState('')
+  const [mostrarCarta, setMostrarCarta] = useState(false)
+  const [salvandoCarta, setSalvandoCarta] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -41,6 +45,12 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
 
       if (!reg) { setLoading(false); return }
       setRegistro(reg)
+
+      // Carregar carta de correção existente
+      if (reg.CartaCorrecao) {
+        setCartaCorrecao(reg.CartaCorrecao as string)
+        setCartaSalva(reg.CartaCorrecao as string)
+      }
 
       // Parsear peças
       if (reg.PecasInfo) {
@@ -70,6 +80,20 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
     }
     carregar()
   }, [id, user])
+
+  const salvarCartaCorrecao = async () => {
+    if (!cartaCorrecao.trim()) {
+      alert('Escreva a carta de correção antes de enviar.')
+      return
+    }
+    setSalvandoCarta(true)
+    await supabase
+      .from('Ordem_Servico_Tecnicos')
+      .update({ CartaCorrecao: cartaCorrecao.trim() })
+      .eq('Ordem_Servico', id)
+    setCartaSalva(cartaCorrecao.trim())
+    setSalvandoCarta(false)
+  }
 
   const handleGerarPdf = async () => {
     if (!registro) return
@@ -407,6 +431,79 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
           </div>
         </div>
       )}
+
+      {/* Carta de Correção */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FileEdit size={18} color="#D97706" />
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#D97706' }}>Carta de Correção</span>
+          </div>
+          {cartaSalva && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+              background: '#D1FAE5', color: '#059669',
+            }}>Enviada</span>
+          )}
+        </div>
+
+        {cartaSalva && !mostrarCarta ? (
+          <div>
+            <div style={{
+              background: '#FFFBEB', borderRadius: 10, padding: 14,
+              border: '1px solid #FDE68A', fontSize: 14, color: '#92400E',
+              lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 10,
+            }}>
+              {cartaSalva}
+            </div>
+            <button type="button" onClick={() => setMostrarCarta(true)} style={{
+              fontSize: 13, color: '#D97706', background: 'none', border: 'none',
+              cursor: 'pointer', fontWeight: 600, padding: 0,
+            }}>
+              Editar carta
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>
+              Se precisar corrigir alguma informação do relatório, descreva aqui. A carta ficará anexada junto ao relatório no portal.
+            </p>
+            <textarea
+              value={cartaCorrecao}
+              onChange={(e) => setCartaCorrecao(e.target.value)}
+              placeholder="Descreva a correção necessária..."
+              rows={4}
+              style={{
+                width: '100%', padding: '12px 14px', borderRadius: 12,
+                border: '2px solid #FDE68A', fontSize: 14, outline: 'none',
+                background: '#FFFBEB', boxSizing: 'border-box', resize: 'vertical',
+                lineHeight: 1.5,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              {cartaSalva && (
+                <button type="button" onClick={() => { setMostrarCarta(false); setCartaCorrecao(cartaSalva) }} style={{
+                  flex: 1, padding: '12px 0', borderRadius: 10,
+                  background: '#F3F4F6', color: '#6B7280', border: 'none',
+                  fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}>
+                  Cancelar
+                </button>
+              )}
+              <button type="button" onClick={salvarCartaCorrecao} disabled={salvandoCarta || !cartaCorrecao.trim()} style={{
+                flex: 1, padding: '12px 0', borderRadius: 10,
+                background: !cartaCorrecao.trim() ? '#E5E7EB' : '#D97706', color: '#fff', border: 'none',
+                fontSize: 14, fontWeight: 700, cursor: salvandoCarta ? 'wait' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                opacity: salvandoCarta ? 0.7 : 1,
+              }}>
+                <Send size={16} />
+                {salvandoCarta ? 'Enviando...' : 'Enviar Carta'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Botão PDF fixo no final */}
       <button onClick={handleGerarPdf} disabled={gerandoPdf} style={{
