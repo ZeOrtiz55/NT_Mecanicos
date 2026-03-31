@@ -1,10 +1,10 @@
-const CACHE_NAME = 'nt-mecanicos-v1';
+const CACHE_NAME = 'nt-mecanicos-v2';
 const OFFLINE_URL = '/';
 
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
-  '/Logo_Nova.png',
+  '/capa_app.png',
 ];
 
 self.addEventListener('install', (event) => {

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head><title>Gerar Ícones NT Mecânicos</title></head>
+<body style="background:#f3f4f6;display:flex;flex-direction:column;align-items:center;padding:40px;font-family:sans-serif">
+<h2>Ícones NT Mecânicos</h2>
+<p>Clique com botão direito em cada ícone → "Salvar imagem como..."</p>
+
+<div style="display:flex;gap:40px;flex-wrap:wrap;justify-content:center;margin-top:20px">
+  <div style="text-align:center">
+    <canvas id="c512" width="512" height="512"></canvas>
+    <p>icon-512.png (512x512)</p>
+  </div>
+  <div style="text-align:center">
+    <canvas id="c192" width="192" height="192"></canvas>
+    <p>icon-192.png (192x192)</p>
+  </div>
+</div>
+
+<div style="margin-top:30px;display:flex;gap:16px">
+  <button onclick="baixar('c512','icon-512.png')" style="padding:12px 24px;background:#1E3A5F;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer">Baixar 512x512</button>
+  <button onclick="baixar('c192','icon-192.png')" style="padding:12px 24px;background:#1E3A5F;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer">Baixar 192x192</button>
+</div>
+
+<script>
+function desenhar(id) {
+  var c = document.getElementById(id);
+  var s = c.width;
+  var ctx = c.getContext('2d');
+
+  // Fundo com gradiente
+  var grad = ctx.createLinearGradient(0, 0, s, s);
+  grad.addColorStop(0, '#1E3A5F');
+  grad.addColorStop(1, '#0F2440');
+  ctx.fillStyle = grad;
+
+  // Rounded rect
+  var r = s * 0.12;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(s - r, 0);
+  ctx.quadraticCurveTo(s, 0, s, r);
+  ctx.lineTo(s, s - r);
+  ctx.quadraticCurveTo(s, s, s - r, s);
+  ctx.lineTo(r, s);
+  ctx.quadraticCurveTo(0, s, 0, s - r);
+  ctx.lineTo(0, r);
+  ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Círculo decorativo sutil atrás
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.44, s * 0.28, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = s * 0.03;
+  ctx.stroke();
+
+  // "NT" grande e bold
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold ' + (s * 0.38) + 'px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('NT', s * 0.5, s * 0.42);
+
+  // Linha vermelha decorativa (cor da Nova Tratores)
+  var lw = s * 0.4;
+  var lh = s * 0.025;
+  var lx = (s - lw) / 2;
+  var ly = s * 0.58;
+  var lr = lh;
+  ctx.fillStyle = '#E63946';
+  ctx.beginPath();
+  ctx.moveTo(lx + lr, ly);
+  ctx.lineTo(lx + lw - lr, ly);
+  ctx.quadraticCurveTo(lx + lw, ly, lx + lw, ly + lr);
+  ctx.lineTo(lx + lw, ly + lh - lr);
+  ctx.quadraticCurveTo(lx + lw, ly + lh, lx + lw - lr, ly + lh);
+  ctx.lineTo(lx + lr, ly + lh);
+  ctx.quadraticCurveTo(lx, ly + lh, lx, ly + lh - lr);
+  ctx.lineTo(lx, ly + lr);
+  ctx.quadraticCurveTo(lx, ly, lx + lr, ly);
+  ctx.closePath();
+  ctx.fill();
+
+  // "MECÂNICOS" embaixo
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '600 ' + (s * 0.085) + 'px "Segoe UI", Arial, sans-serif';
+  ctx.letterSpacing = (s * 0.015) + 'px';
+  ctx.fillText('MECÂNICOS', s * 0.5, s * 0.72);
+
+  // Ícone de chave inglesa pequeno embaixo
+  ctx.save();
+  ctx.translate(s * 0.5, s * 0.86);
+  ctx.scale(s / 512, s / 512);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '32px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🔧', 0, 0);
+  ctx.restore();
+}
+
+desenhar('c512');
+desenhar('c192');
+
+function baixar(id, nome) {
+  var c = document.getElementById(id);
+  var link = document.createElement('a');
+  link.download = nome;
+  link.href = c.toDataURL('image/png');
+  link.click();
+}
+</script>
+</body>
+</html>

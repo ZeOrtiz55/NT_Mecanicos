@@ -113,7 +113,9 @@
       "Bash(netstat -ano | grep 3001 | head -5)",
       "Bash(tasklist | grep -i node | head -5)",
       "Bash(git remote:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)"
     ]
   }
 }
