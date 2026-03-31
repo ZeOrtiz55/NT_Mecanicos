@@ -1,0 +1,1109 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { use } from 'react'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { supabase } from '@/lib/supabase'
+import type { OrdemServico } from '@/lib/types'
+import FotoUpload from '@/components/FotoUpload'
+import SignaturePad from '@/components/SignaturePad'
+import { ArrowLeft, Plus, Minus, CheckCircle, Send, Truck, Camera, ChevronDown, ChevronUp, Package, AlertTriangle, FileDown } from 'lucide-react'
+import Link from 'next/link'
+import { gerarPdfRelatorio } from '@/lib/gerarPdfRelatorio'
+
+const TIPOS_SERVICO = ['Manutenção', 'Revisão', 'Montagem Implemento', 'Garantia', 'Entrega Técnica', 'Inspeção Pré Entrega']
+const HORAS_REVISAO = ['50', '300', '600', '900', '1200', '1500', '1800', '2100', '2400', '2700', '3000']
+
+interface DiaForm {
+  data: string
+  horaInicio: string
+  horaFim: string
+  kmInicio: string
+  kmFim: string
+}
+
+interface PecaInfo {
+  descricao: string
+  codigo: string
+  qtdUsada: string
+  devolvida: boolean
+  qtdDevolvida: string
+  origem: 'ppv' | 'manual'
+  qtdOriginal: string
+  naoUsada: boolean
+  revisado: boolean
+}
+
+interface MovimentacaoPPV {
+  Id: number
+  Id_PPV: string
+  CodProduto: string
+  Descricao: string
+  Qtde: string
+  Preco: number
+  TipoMovimento: string
+}
+
+export default function PreencherOS({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  const { user } = useCurrentUser()
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [sucesso, setSucesso] = useState(false)
+  const [os, setOs] = useState<OrdemServico | null>(null)
+  const [tecnicos, setTecnicos] = useState<string[]>([])
+  const [veiculos, setVeiculos] = useState<{ IdPlaca: number; NumPlaca: string }[]>([])
+  const [existingId, setExistingId] = useState<number | null>(null)
+
+  // Form state
+  const [tecResp1, setTecResp1] = useState('')
+  const [temTec2, setTemTec2] = useState(false)
+  const [tecResp2, setTecResp2] = useState('')
+  const [diagnostico, setDiagnostico] = useState('')
+  const [servicoRealizado, setServicoRealizado] = useState('')
+  const [tipoServico, setTipoServico] = useState('')
+  const [tipoRev, setTipoRev] = useState('')
+  const [projeto, setProjeto] = useState('')
+  const [chassis, setChassis] = useState('')
+  const [horimetro, setHorimetro] = useState('')
+  const [numPlaca, setNumPlaca] = useState('')
+  const [nomResp, setNomResp] = useState('')
+
+  // Dias (dinâmico)
+  const [dias, setDias] = useState<DiaForm[]>([{ data: '', horaInicio: '', horaFim: '', kmInicio: '', kmFim: '' }])
+
+  // Peças informadas pelo técnico
+  const [pecas, setPecas] = useState<PecaInfo[]>([])
+  const [loadingPPV, setLoadingPPV] = useState(false)
+  const [ppvAberto, setPpvAberto] = useState(false)
+  const [ppvRevisado, setPpvRevisado] = useState(false)
+  const [justificativaPecaExtra, setJustificativaPecaExtra] = useState('')
+
+  // Fotos
+  const [fotoHorimetro, setFotoHorimetro] = useState('')
+  const [fotoChassis, setFotoChassis] = useState('')
+  const [fotoFrente, setFotoFrente] = useState('')
+  const [fotoDireita, setFotoDireita] = useState('')
+  const [fotoEsquerda, setFotoEsquerda] = useState('')
+  const [fotoTraseira, setFotoTraseira] = useState('')
+  const [fotoVolante, setFotoVolante] = useState('')
+  const [fotoFalha1, setFotoFalha1] = useState('')
+  const [fotoFalha2, setFotoFalha2] = useState('')
+  const [fotoFalha3, setFotoFalha3] = useState('')
+  const [fotoFalha4, setFotoFalha4] = useState('')
+  const [fotoPecaNova1, setFotoPecaNova1] = useState('')
+  const [fotoPecaNova2, setFotoPecaNova2] = useState('')
+  const [fotoPecaInstalada1, setFotoPecaInstalada1] = useState('')
+  const [fotoPecaInstalada2, setFotoPecaInstalada2] = useState('')
+
+  // Assinaturas
+  const [assCliente, setAssCliente] = useState('')
+  const [assTecnico, setAssTecnico] = useState('')
+
+  const carregarProdutosPPV = async (idPPV: string) => {
+    setLoadingPPV(true)
+    const { data: movs } = await supabase
+      .from('movimentacoes')
+      .select('*')
+      .eq('Id_PPV', idPPV)
+    if (movs && movs.length > 0) {
+      const pecasPPV: PecaInfo[] = (movs as MovimentacaoPPV[]).map((m) => ({
+        descricao: m.Descricao || m.CodProduto,
+        codigo: m.CodProduto || '',
+        qtdUsada: m.Qtde || '1',
+        devolvida: false,
+        qtdDevolvida: '',
+        origem: 'ppv' as const,
+        qtdOriginal: m.Qtde || '1',
+        naoUsada: false,
+        revisado: false,
+      }))
+      setPecas(pecasPPV)
+    }
+    setLoadingPPV(false)
+  }
+
+  useEffect(() => {
+    const carregar = async () => {
+      const [{ data: osData }, { data: tecData }, { data: veicData }, { data: existing }] = await Promise.all([
+        supabase.from('Ordem_Servico').select('*').eq('Id_Ordem', id).single(),
+        supabase.from('Tecnicos_Appsheet').select('UsuNome').order('UsuNome'),
+        supabase.from('SupaPlacas').select('IdPlaca, NumPlaca').order('NumPlaca'),
+        supabase.from('Ordem_Servico_Tecnicos').select('*').eq('Ordem_Servico', id).maybeSingle(),
+      ])
+
+      if (osData) {
+        setOs(osData as OrdemServico)
+        if (osData.Projeto) setProjeto(osData.Projeto)
+        if (osData.Tipo_Servico) setTipoServico(osData.Tipo_Servico)
+      }
+      if (tecData) setTecnicos(tecData.map((t: { UsuNome: string }) => t.UsuNome).filter(Boolean))
+      if (veicData) setVeiculos(veicData as { IdPlaca: number; NumPlaca: string }[])
+
+      if (existing) {
+        setExistingId(existing.IdOs)
+        setTecResp1(existing.TecResp1 || '')
+        setTemTec2(existing.TemTec || false)
+        setTecResp2(existing.TecResp2 || '')
+        setDiagnostico(existing.Motivo || '')
+        setServicoRealizado(existing.ServicoRealizado || '')
+        setTipoServico(existing.TipoServico || osData?.Tipo_Servico || '')
+        setTipoRev(existing.TipoRev || '')
+        setProjeto(existing.Projeto || osData?.Projeto || '')
+        setChassis(existing.Chassis || '')
+        setHorimetro(existing.Horimetro || '')
+        setNumPlaca(existing.NumPlaca || '')
+        setNomResp(existing.NomResp || '')
+        setFotoHorimetro(existing.FotoHorimetro || '')
+        setFotoChassis(existing.FotoChassis || '')
+        setFotoFrente(existing.FotoFrente || '')
+        setFotoDireita(existing.FotoDireita || '')
+        setFotoEsquerda(existing.FotoEsquerda || '')
+        setFotoTraseira(existing.FotoTraseira || '')
+        setFotoVolante(existing.FotoVolante || '')
+        setFotoFalha1(existing.FotoFalha1 || '')
+        setFotoFalha2(existing.FotoFalha2 || '')
+        setFotoFalha3(existing.FotoFalha3 || '')
+        setFotoFalha4(existing.FotoFalha4 || '')
+        setFotoPecaNova1(existing.FotoPecaNova1 || '')
+        setFotoPecaNova2(existing.FotoPecaNova2 || '')
+        setFotoPecaInstalada1(existing.FotoPecaInstalada1 || '')
+        setFotoPecaInstalada2(existing.FotoPecaInstalada2 || '')
+        setAssCliente(existing.AssCliente || '')
+        setAssTecnico(existing.AssTecnico || '')
+        setJustificativaPecaExtra(existing.JustificativaPecaExtra || '')
+
+        const diasLoaded: DiaForm[] = []
+        if (existing.DataInicio) {
+          diasLoaded.push({
+            data: existing.DataInicio, horaInicio: existing.InicioHora || '',
+            horaFim: existing.FinalHora || '', kmInicio: existing.InicioKm || '', kmFim: existing.FinalKm || '',
+          })
+        }
+        if (existing.AdicionarData2 && existing.DataInicio2) {
+          diasLoaded.push({
+            data: existing.DataInicio2, horaInicio: existing.InicioHora2 || '',
+            horaFim: existing.FinalHora2 || '', kmInicio: existing.InicioKm2 || '', kmFim: existing.FinalKm2 || '',
+          })
+        }
+        if (existing.AdicionarData3 && existing.DataInicio3) {
+          diasLoaded.push({
+            data: existing.DataInicio3, horaInicio: existing.InicioHora3 || '',
+            horaFim: existing.FinaHora3 || '', kmInicio: existing.InicioKm3 || '', kmFim: existing.FinalKm3 || '',
+          })
+        }
+        if (diasLoaded.length > 0) setDias(diasLoaded)
+
+        if (existing.PecasInfo) {
+          try {
+            const parsed = JSON.parse(existing.PecasInfo)
+            const pecasLoaded = parsed.map((p: Partial<PecaInfo>) => ({
+              descricao: p.descricao || '', codigo: p.codigo || '', qtdUsada: p.qtdUsada || '',
+              devolvida: p.devolvida || false, qtdDevolvida: p.qtdDevolvida || '',
+              origem: p.origem || 'manual', qtdOriginal: p.qtdOriginal || '',
+              naoUsada: p.naoUsada || false, revisado: p.revisado !== undefined ? p.revisado : true,
+            }))
+            setPecas(pecasLoaded)
+            const ppvItems = pecasLoaded.filter((p: PecaInfo) => p.origem === 'ppv')
+            if (ppvItems.length === 0 || ppvItems.every((p: PecaInfo) => p.revisado)) {
+              setPpvRevisado(true)
+            }
+          } catch { /* ignore */ }
+        } else if (osData?.ID_PPV) {
+          await carregarProdutosPPV(osData.ID_PPV)
+        }
+      } else {
+        if (user) setTecResp1(user.tecnico_nome)
+        if (osData?.ID_PPV) {
+          await carregarProdutosPPV(osData.ID_PPV)
+        }
+      }
+
+      setLoading(false)
+    }
+    carregar()
+  }, [id, user])
+
+  const uploadFoto = async (file: File, campo: string): Promise<string> => {
+    const ext = file.name.split('.').pop() || 'jpg'
+    const path = `os-tecnicos/${id}/${campo}_${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('requisicoes').upload(path, file)
+    if (error) { console.error(error); return '' }
+    const { data } = supabase.storage.from('requisicoes').getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  const handleFoto = async (setter: (v: string) => void, campo: string, file: File) => {
+    setter(URL.createObjectURL(file))
+    const url = await uploadFoto(file, campo)
+    if (url) setter(url)
+  }
+
+  const calcTotalHoras = () => {
+    let total = 0
+    for (const d of dias) {
+      if (d.horaInicio && d.horaFim) {
+        const [hi, mi] = d.horaInicio.split(':').map(Number)
+        const [hf, mf] = d.horaFim.split(':').map(Number)
+        total += (hf * 60 + mf) - (hi * 60 + mi)
+      }
+    }
+    if (total <= 0) return ''
+    const h = Math.floor(total / 60)
+    const m = total % 60
+    return `${h}h${m > 0 ? `${m}m` : ''}`
+  }
+
+  const calcTotalKm = () => {
+    let total = 0
+    for (const d of dias) {
+      const ini = parseFloat(d.kmInicio) || 0
+      const fim = parseFloat(d.kmFim) || 0
+      if (fim > ini) total += fim - ini
+    }
+    return total > 0 ? String(total) : ''
+  }
+
+  const ppvItems = pecas.filter(p => p.origem === 'ppv')
+  const manualItems = pecas.filter(p => p.origem === 'manual')
+  const todosRevisados = ppvItems.length === 0 || ppvItems.every(p => p.revisado)
+  if (todosRevisados !== ppvRevisado) {
+    setTimeout(() => setPpvRevisado(todosRevisados), 0)
+  }
+
+  const enviar = async () => {
+    if (!user) return
+
+    if (os?.ID_PPV && !todosRevisados) {
+      alert(`Você precisa revisar todos os produtos do PPV antes de enviar.\n\n${ppvItems.filter(p => !p.revisado).length} produto(s) pendente(s).`)
+      setPpvAberto(true)
+      return
+    }
+
+    // Validar justificativa se tem peças extras
+    if (manualItems.length > 0 && !justificativaPecaExtra.trim()) {
+      alert('Você adicionou peças/serviços extras. Por favor, justifique por que não avisou antes.')
+      return
+    }
+
+    setSaving(true)
+
+    const payload: Record<string, unknown> = {
+      Ordem_Servico: id,
+      TecResp1: tecResp1,
+      TemTec: temTec2,
+      TecResp2: temTec2 ? tecResp2 : '',
+      Motivo: diagnostico,
+      ServicoRealizado: servicoRealizado,
+      TipoServico: tipoServico,
+      TipoRev: tipoRev,
+      Projeto: projeto,
+      Chassis: chassis,
+      Garantia: tipoServico === 'Garantia',
+      Horimetro: horimetro,
+      NumPlaca: numPlaca,
+      TratorLocal1: '',
+      TratorLocal2: '',
+      NomResp: nomResp,
+      TotalHora: calcTotalHoras(),
+      TotalKm: calcTotalKm(),
+      DataInicio: dias[0]?.data || '',
+      DataFinal: dias[dias.length - 1]?.data || dias[0]?.data || '',
+      InicioHora: dias[0]?.horaInicio || '',
+      FinalHora: dias[0]?.horaFim || '',
+      InicioKm: dias[0]?.kmInicio || '',
+      FinalKm: dias[0]?.kmFim || '',
+      AdicionarData2: dias.length >= 2,
+      DataInicio2: dias[1]?.data || '',
+      InicioHora2: dias[1]?.horaInicio || '',
+      FinalHora2: dias[1]?.horaFim || '',
+      InicioKm2: dias[1]?.kmInicio || '',
+      FinalKm2: dias[1]?.kmFim || '',
+      AdicionarData3: dias.length >= 3,
+      DataInicio3: dias[2]?.data || '',
+      InicioHora3: dias[2]?.horaInicio || '',
+      FinaHora3: dias[2]?.horaFim || '',
+      InicioKm3: dias[2]?.kmInicio || '',
+      FinalKm3: dias[2]?.kmFim || '',
+      FotoHorimetro: fotoHorimetro, FotoChassis: fotoChassis,
+      FotoFrente: fotoFrente, FotoDireita: fotoDireita,
+      FotoEsquerda: fotoEsquerda, FotoTraseira: fotoTraseira, FotoVolante: fotoVolante,
+      FotoFalha1: fotoFalha1, FotoFalha2: fotoFalha2,
+      FotoFalha3: fotoFalha3, FotoFalha4: fotoFalha4,
+      FotoPecaNova1: fotoPecaNova1, FotoPecaNova2: fotoPecaNova2,
+      FotoPecaInstalada1: fotoPecaInstalada1, FotoPecaInstalada2: fotoPecaInstalada2,
+      AssCliente: assCliente, AssTecnico: assTecnico,
+      PecasInfo: JSON.stringify(pecas),
+      JustificativaPecaExtra: justificativaPecaExtra || null,
+      Data: new Date().toISOString().split('T')[0],
+      Status: 'enviado',
+      pdf_criado: false,
+    }
+
+    if (existingId) {
+      await supabase.from('Ordem_Servico_Tecnicos').update(payload).eq('IdOs', existingId)
+    } else {
+      const { data } = await supabase.from('Ordem_Servico_Tecnicos').insert(payload).select('IdOs').single()
+      if (data) setExistingId(data.IdOs)
+    }
+
+    // Gerar PDF, fazer upload e vincular à OS no portal
+    try {
+      let cidade = ''
+      if (os?.Cnpj_Cliente) {
+        const { data: cli } = await supabase
+          .from('Clientes')
+          .select('cidade')
+          .eq('cnpj_cpf', os.Cnpj_Cliente)
+          .maybeSingle()
+        cidade = cli?.cidade || ''
+      }
+
+      const pdfBlob = await gerarPdfRelatorio({
+        ordemServico: id,
+        cliente: os?.Os_Cliente || '',
+        endereco: os?.Endereco_Cliente || '',
+        cidade,
+        tipoServico,
+        projeto,
+        idPPV: os?.ID_PPV || '',
+        status: 'Enviado',
+        tecResp1,
+        temTec2,
+        tecResp2,
+        chassis,
+        horimetro,
+        garantia: tipoServico === 'Garantia',
+        numPlaca,
+        tratorLocal1: '',
+        tratorLocal2: '',
+        diagnostico,
+        servicoRealizado,
+        tipoRev,
+        dias,
+        totalHora: calcTotalHoras(),
+        totalKm: calcTotalKm(),
+        pecas,
+        fotoHorimetro, fotoChassis,
+        fotoFrente, fotoDireita, fotoEsquerda, fotoTraseira, fotoVolante,
+        fotoFalha1, fotoFalha2, fotoFalha3, fotoFalha4,
+        fotoPecaNova1, fotoPecaNova2,
+        fotoPecaInstalada1, fotoPecaInstalada2,
+        assCliente, assTecnico,
+        nomResp,
+        data: new Date().toISOString().split('T')[0],
+        apenasBlob: true,
+      })
+
+      if (pdfBlob) {
+        const pdfPath = `relatorios-os/${id}/Relatorio_${id}_${Date.now()}.pdf`
+        const pdfFile = new File([pdfBlob], `Relatorio_${id}.pdf`, { type: 'application/pdf' })
+        const { error: upErr } = await supabase.storage.from('requisicoes').upload(pdfPath, pdfFile)
+
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('requisicoes').getPublicUrl(pdfPath)
+          const pdfUrl = urlData.publicUrl
+
+          await Promise.all([
+            supabase.from('Ordem_Servico').update({
+              ID_Relatorio_Final: pdfUrl,
+              Status: 'Executada aguardando cliente',
+            }).eq('Id_Ordem', id),
+            supabase.from('Ordem_Servico_Tecnicos').update({ pdf_criado: true }).eq('Ordem_Servico', id),
+          ])
+
+          const { data: osData } = await supabase.from('Ordem_Servico').select('ID_PPV').eq('Id_Ordem', id).limit(1)
+          const ppvStr = osData?.[0]?.ID_PPV
+          if (ppvStr) {
+            const ppvIds = String(ppvStr).split(',').map(s => s.trim()).filter(Boolean)
+            if (ppvIds.length > 0) {
+              await supabase.from('pedidos').update({ status: 'Aguardando Para Faturar' })
+                .in('id_pedido', ppvIds).not('status', 'in', '("Fechado","Cancelado")')
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao gerar/enviar PDF:', err)
+    }
+
+    setSaving(false)
+    setSucesso(true)
+  }
+
+  const [gerandoPdf, setGerandoPdf] = useState(false)
+
+  const handleGerarPdf = async () => {
+    setGerandoPdf(true)
+    try {
+      let cidade = ''
+      if (os?.Cnpj_Cliente) {
+        const { data: cli } = await supabase
+          .from('Clientes')
+          .select('cidade')
+          .eq('cnpj_cpf', os.Cnpj_Cliente)
+          .maybeSingle()
+        cidade = cli?.cidade || ''
+      }
+
+      await gerarPdfRelatorio({
+        ordemServico: id,
+        cliente: os?.Os_Cliente || '',
+        endereco: os?.Endereco_Cliente || '',
+        cidade,
+        tipoServico,
+        projeto,
+        idPPV: os?.ID_PPV || '',
+        status: 'Enviado',
+        tecResp1,
+        temTec2,
+        tecResp2,
+        chassis,
+        horimetro,
+        garantia: tipoServico === 'Garantia',
+        numPlaca,
+        tratorLocal1: '',
+        tratorLocal2: '',
+        diagnostico,
+        servicoRealizado,
+        tipoRev,
+        dias,
+        totalHora: calcTotalHoras(),
+        totalKm: calcTotalKm(),
+        pecas,
+        fotoHorimetro, fotoChassis,
+        fotoFrente, fotoDireita, fotoEsquerda, fotoTraseira, fotoVolante,
+        fotoFalha1, fotoFalha2, fotoFalha3, fotoFalha4,
+        fotoPecaNova1, fotoPecaNova2,
+        fotoPecaInstalada1, fotoPecaInstalada2,
+        assCliente, assTecnico,
+        nomResp,
+        data: new Date().toISOString().split('T')[0],
+      })
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    }
+    setGerandoPdf(false)
+  }
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+
+  if (sucesso) {
+    return (
+      <div style={{
+        minHeight: '60vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 20,
+      }}>
+        <div style={{
+          width: 90, height: 90, borderRadius: '50%', background: '#D1FAE5',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+        }}>
+          <CheckCircle size={48} color="#10B981" />
+        </div>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1F2937', marginBottom: 8 }}>OS Enviada!</h2>
+        <p style={{ fontSize: 15, color: '#6B7280', marginBottom: 28 }}>Os dados foram salvos com sucesso.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 300 }}>
+          <button onClick={handleGerarPdf} disabled={gerandoPdf} style={{
+            background: '#1E3A5F', color: '#fff', borderRadius: 14,
+            padding: '16px 40px', fontSize: 16, fontWeight: 700, border: 'none',
+            cursor: gerandoPdf ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            <FileDown size={20} />
+            {gerandoPdf ? 'Gerando PDF...' : 'Baixar PDF'}
+          </button>
+          <Link href="/os" style={{
+            background: '#C41E2A', color: '#fff', borderRadius: 14,
+            padding: '16px 40px', fontSize: 16, fontWeight: 700, textDecoration: 'none',
+            textAlign: 'center',
+          }}>
+            Voltar às Ordens
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '14px 16px', borderRadius: 12,
+    border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', background: '#fff',
+    boxSizing: 'border-box',
+  }
+  const labelStyle: React.CSSProperties = {
+    fontSize: 14, fontWeight: 700, color: '#1F2937', display: 'block', marginBottom: 6,
+  }
+  const sectionStyle: React.CSSProperties = {
+    background: '#fff', borderRadius: 16, padding: 18,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 16,
+  }
+  const sectionTitle = (text: string, color = '#C41E2A') => (
+    <div style={{ fontSize: 16, fontWeight: 700, color, marginBottom: 14 }}>{text}</div>
+  )
+
+  const updateDia = (index: number, field: keyof DiaForm, value: string) => {
+    setDias(prev => prev.map((d, i) => i === index ? { ...d, [field]: value } : d))
+  }
+
+  return (
+    <div>
+      <Link href={`/os/${id}`} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        color: '#C41E2A', fontSize: 15, fontWeight: 600,
+        textDecoration: 'none', marginBottom: 16, padding: '8px 0',
+      }}>
+        <ArrowLeft size={20} /> Voltar
+      </Link>
+
+      <h1 style={{ fontSize: 20, fontWeight: 700, color: '#C41E2A', marginBottom: 4 }}>
+        OS Técnica — {id}
+      </h1>
+      {os && (
+        <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 20 }}>
+          {os.Os_Cliente} • {os.Tipo_Servico}
+        </p>
+      )}
+
+      {/* INFO DO POS (somente leitura) */}
+      {os && (
+        <div style={{ ...sectionStyle, background: '#F9FAFB', borderLeft: '4px solid #1E3A5F' }}>
+          {sectionTitle('Dados do POS', '#1E3A5F')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+            <div><strong>Cliente:</strong> {os.Os_Cliente}</div>
+            <div><strong>CPF/CNPJ:</strong> {os.Cnpj_Cliente || '—'}</div>
+            <div><strong>Endereço:</strong> {os.Endereco_Cliente || '—'}</div>
+            <div style={{ display: 'flex', gap: 20 }}>
+              <span><strong>Horas POS:</strong> {os.Qtd_HR || 0}h</span>
+              <span><strong>KM POS:</strong> {os.Qtd_KM || 0} km</span>
+            </div>
+            {os.Serv_Solicitado && <div><strong>Descrição:</strong> {os.Serv_Solicitado}</div>}
+            {os.Projeto && <div><strong>Projeto:</strong> {os.Projeto}</div>}
+            {os.ID_PPV && (
+              <button type="button" onClick={() => {
+                if (!ppvAberto && pecas.filter(p => p.origem === 'ppv').length === 0) {
+                  carregarProdutosPPV(os.ID_PPV)
+                }
+                setPpvAberto(!ppvAberto)
+              }} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: ppvRevisado ? '#D1FAE5' : '#DBEAFE',
+                border: `2px solid ${ppvRevisado ? '#10B981' : '#3B82F6'}`,
+                borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
+                marginTop: 6, width: '100%', textAlign: 'left',
+              }}>
+                <Package size={18} color={ppvRevisado ? '#059669' : '#2563EB'} />
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: ppvRevisado ? '#059669' : '#1D4ED8' }}>
+                  PPV: {os.ID_PPV}
+                </span>
+                {ppvRevisado ? (
+                  <CheckCircle size={18} color="#059669" />
+                ) : (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', background: '#FEE2E2', padding: '2px 8px', borderRadius: 6 }}>
+                    Revisar
+                  </span>
+                )}
+                {ppvAberto ? <ChevronUp size={18} color="#6B7280" /> : <ChevronDown size={18} color="#6B7280" />}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PRODUTOS DO PPV (expandível) */}
+      {os?.ID_PPV && ppvAberto && (
+        <div style={{
+          ...sectionStyle, borderLeft: '4px solid #3B82F6',
+          background: '#F8FAFC', marginTop: -8,
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#1D4ED8', marginBottom: 6 }}>
+            Produtos do PPV — {os.ID_PPV}
+          </div>
+          <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 14 }}>
+            Revise cada produto: confirme se usou, informe se devolveu ou não utilizou. Todos devem ser revisados para enviar a OS.
+          </p>
+
+          {loadingPPV ? (
+            <div style={{ textAlign: 'center', padding: 20 }}>
+              <div className="spinner" style={{ margin: '0 auto' }} />
+              <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>Carregando produtos...</div>
+            </div>
+          ) : (
+            <>
+              {pecas.filter(p => p.origem === 'ppv').length > 0 && (() => {
+                const items = pecas.filter(p => p.origem === 'ppv')
+                const revisados = items.filter(p => p.revisado).length
+                const total = items.length
+                return (
+                  <div style={{
+                    background: revisados === total ? '#D1FAE5' : '#FEF3C7',
+                    borderRadius: 10, padding: '10px 14px', marginBottom: 14,
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    {revisados === total
+                      ? <CheckCircle size={16} color="#059669" />
+                      : <AlertTriangle size={16} color="#D97706" />
+                    }
+                    <span style={{
+                      fontSize: 13, fontWeight: 700,
+                      color: revisados === total ? '#059669' : '#D97706',
+                    }}>
+                      {revisados === total
+                        ? 'Todos os produtos revisados!'
+                        : `${revisados} de ${total} produtos revisados`}
+                    </span>
+                  </div>
+                )
+              })()}
+
+              {pecas.map((peca, i) => {
+                if (peca.origem !== 'ppv') return null
+                return (
+                  <div key={i} style={{
+                    background: peca.revisado
+                      ? (peca.naoUsada ? '#FEF2F2' : '#F0FDF4')
+                      : '#fff',
+                    borderRadius: 12, padding: 14, marginBottom: 10,
+                    border: `2px solid ${peca.revisado
+                      ? (peca.naoUsada ? '#FECACA' : '#BBF7D0')
+                      : '#FDE68A'}`,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937', marginBottom: 2 }}>
+                          {peca.descricao}
+                        </div>
+                        {peca.codigo && (
+                          <div style={{ fontSize: 11, color: '#6B7280' }}>Cód: {peca.codigo}</div>
+                        )}
+                        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                          Qtd separada: <strong>{peca.qtdOriginal}</strong>
+                        </div>
+                      </div>
+                      {peca.revisado ? (
+                        <CheckCircle size={20} color={peca.naoUsada ? '#DC2626' : '#10B981'} />
+                      ) : (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                          background: '#FEF3C7', color: '#D97706',
+                        }}>
+                          Pendente
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Usou?</span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button type="button" onClick={() => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, naoUsada: false, revisado: true } : p))}
+                          style={{ padding: '7px 16px', borderRadius: 8, border: `2px solid ${!peca.naoUsada && peca.revisado ? '#10B981' : '#E5E7EB'}`, background: !peca.naoUsada && peca.revisado ? '#D1FAE5' : '#fff', color: !peca.naoUsada && peca.revisado ? '#059669' : '#6B7280', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                          Sim
+                        </button>
+                        <button type="button" onClick={() => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, naoUsada: true, devolvida: false, qtdDevolvida: '', revisado: true } : p))}
+                          style={{ padding: '7px 16px', borderRadius: 8, border: `2px solid ${peca.naoUsada ? '#EF4444' : '#E5E7EB'}`, background: peca.naoUsada ? '#FEE2E2' : '#fff', color: peca.naoUsada ? '#DC2626' : '#6B7280', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                          Não usou
+                        </button>
+                      </div>
+                    </div>
+
+                    {peca.revisado && !peca.naoUsada && (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div>
+                            <label style={{ fontSize: 11, color: '#6B7280' }}>Qtd utilizada</label>
+                            <input type="text" inputMode="numeric" value={peca.qtdUsada}
+                              onChange={(e) => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, qtdUsada: e.target.value } : p))}
+                              style={inputStyle} placeholder="0" />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, color: '#6B7280' }}>Devolveu?</label>
+                            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                              <button type="button" onClick={() => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, devolvida: false, qtdDevolvida: '' } : p))}
+                                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `2px solid ${!peca.devolvida ? '#1E3A5F' : '#E5E7EB'}`, background: !peca.devolvida ? '#1E3A5F' : '#fff', color: !peca.devolvida ? '#fff' : '#6B7280', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                Não
+                              </button>
+                              <button type="button" onClick={() => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, devolvida: true } : p))}
+                                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `2px solid ${peca.devolvida ? '#10B981' : '#E5E7EB'}`, background: peca.devolvida ? '#D1FAE5' : '#fff', color: peca.devolvida ? '#059669' : '#6B7280', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                Sim
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        {peca.devolvida && (
+                          <div style={{ marginTop: 8 }}>
+                            <label style={{ fontSize: 11, color: '#6B7280' }}>Qtd devolvida</label>
+                            <input type="text" inputMode="numeric" value={peca.qtdDevolvida}
+                              onChange={(e) => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, qtdDevolvida: e.target.value } : p))}
+                              style={inputStyle} placeholder="0" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 1. TÉCNICO */}
+      <div style={sectionStyle}>
+        {sectionTitle('Técnico Responsável')}
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Técnico Principal</label>
+          <input type="text" value={tecResp1} readOnly style={{ ...inputStyle, background: '#F3F4F6', color: '#6B7280' }} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: temTec2 ? 12 : 0 }}>
+          <button type="button" onClick={() => { setTemTec2(!temTec2); setTecResp2('') }} style={{
+            padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+            border: `2px solid ${temTec2 ? '#C41E2A' : '#E5E7EB'}`,
+            background: temTec2 ? '#FFF5F5' : '#fff',
+            color: temTec2 ? '#C41E2A' : '#6B7280', cursor: 'pointer',
+          }}>
+            {temTec2 ? <Minus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> : <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />}
+            {temTec2 ? 'Remover 2º Técnico' : 'Adicionar 2º Técnico'}
+          </button>
+        </div>
+
+        {temTec2 && (
+          <div>
+            <label style={labelStyle}>Segundo Técnico</label>
+            <select value={tecResp2} onChange={(e) => setTecResp2(e.target.value)} style={inputStyle}>
+              <option value="">Selecione...</option>
+              {tecnicos.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* 2. DIAGNÓSTICO E SERVIÇO */}
+      <div style={sectionStyle}>
+        {sectionTitle('Diagnóstico e Serviço', '#1E3A5F')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Diagnóstico (o que estava acontecendo?)</label>
+            <textarea value={diagnostico} onChange={(e) => setDiagnostico(e.target.value)} rows={3}
+              placeholder="Descreva o problema encontrado..." style={{ ...inputStyle, resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Serviço Realizado</label>
+            <textarea value={servicoRealizado} onChange={(e) => setServicoRealizado(e.target.value)} rows={3}
+              placeholder="Descreva o que foi feito..." style={{ ...inputStyle, resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={labelStyle}>Tipo de Serviço</label>
+            <select value={tipoServico} onChange={(e) => setTipoServico(e.target.value)} style={inputStyle}>
+              <option value="">Selecione...</option>
+              {TIPOS_SERVICO.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          {tipoServico === 'Revisão' && (
+            <div>
+              <label style={labelStyle}>Revisão de quantas horas?</label>
+              <select value={tipoRev} onChange={(e) => setTipoRev(e.target.value)} style={inputStyle}>
+                <option value="">Selecione...</option>
+                {HORAS_REVISAO.map((h) => <option key={h} value={`${h} horas`}>{h} horas</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. IDENTIFICAÇÃO DO EQUIPAMENTO */}
+      <div style={sectionStyle}>
+        {sectionTitle('Identificação do Equipamento', '#1E3A5F')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {os?.Projeto && (
+            <div>
+              <label style={labelStyle}>Projeto</label>
+              <input type="text" value={projeto} onChange={(e) => setProjeto(e.target.value)} style={inputStyle} />
+            </div>
+          )}
+          <div>
+            <label style={labelStyle}>Final do Chassis (escrito)</label>
+            <input type="text" value={chassis} onChange={(e) => setChassis(e.target.value)}
+              style={inputStyle} placeholder="Últimos dígitos do chassis" />
+          </div>
+          <div>
+            <label style={labelStyle}>Horímetro (escrito)</label>
+            <input type="text" value={horimetro} onChange={(e) => setHorimetro(e.target.value)}
+              style={inputStyle} placeholder="Ex: 2.450" />
+          </div>
+        </div>
+      </div>
+
+      {/* 4. DATAS / HORAS / DESLOCAMENTO */}
+      <div style={sectionStyle}>
+        {sectionTitle('Datas / Horas / Deslocamento', '#1E3A5F')}
+        {dias[0]?.data && dias[0]?.horaInicio && (
+          <div style={{
+            background: '#D1FAE5', borderRadius: 10, padding: '8px 12px',
+            marginBottom: 12, fontSize: 12, color: '#065F46',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <CheckCircle size={14} color="#059669" />
+            Horários pré-preenchidos a partir do registro de visita. Você pode ajustá-los se necessário.
+          </div>
+        )}
+
+        {dias.map((dia, i) => (
+          <div key={i} style={{ marginBottom: i < dias.length - 1 ? 16 : 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#6B7280' }}>Dia {i + 1}</span>
+              {i > 0 && (
+                <button type="button" onClick={() => setDias(prev => prev.filter((_, idx) => idx !== i))}
+                  style={{ fontSize: 12, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                  Remover
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Data</label>
+                <input type="date" value={dia.data} onChange={(e) => updateDia(i, 'data', e.target.value)} style={inputStyle} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Hora Início</label>
+                  <input type="time" value={dia.horaInicio} onChange={(e) => updateDia(i, 'horaInicio', e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Hora Fim</label>
+                  <input type="time" value={dia.horaFim} onChange={(e) => updateDia(i, 'horaFim', e.target.value)} style={inputStyle} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>KM Início</label>
+                  <input type="text" inputMode="numeric" value={dia.kmInicio} onChange={(e) => updateDia(i, 'kmInicio', e.target.value)} style={inputStyle} placeholder="0" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>KM Final</label>
+                  <input type="text" inputMode="numeric" value={dia.kmFim} onChange={(e) => updateDia(i, 'kmFim', e.target.value)} style={inputStyle} placeholder="0" />
+                </div>
+              </div>
+            </div>
+            {i < dias.length - 1 && <div style={{ height: 1, background: '#E5E7EB', margin: '16px 0' }} />}
+          </div>
+        ))}
+
+        {dias.length < 3 && (
+          <button type="button" onClick={() => setDias(prev => [...prev, { data: '', horaInicio: '', horaFim: '', kmInicio: '', kmFim: '' }])} style={{
+            marginTop: 14, padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+            border: '2px solid #E5E7EB', background: '#fff', color: '#6B7280', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <Plus size={14} /> Adicionar mais um dia
+          </button>
+        )}
+
+        {/* Totais calculados */}
+        <div style={{ height: 1, background: '#E5E7EB', margin: '16px 0' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Total Horas</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1E3A5F' }}>{calcTotalHoras() || '—'}</div>
+          </div>
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Total KM</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1E3A5F' }}>{calcTotalKm() || '—'}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. VEÍCULO */}
+      <div style={sectionStyle}>
+        {sectionTitle('Veículo', '#1E3A5F')}
+        <div>
+          <label style={labelStyle}><Truck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Veículo Utilizado</label>
+          <select value={numPlaca} onChange={(e) => setNumPlaca(e.target.value)} style={inputStyle}>
+            <option value="">Selecione a placa...</option>
+            {veiculos.map((v) => <option key={v.IdPlaca} value={v.NumPlaca}>{v.NumPlaca}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* 6. FOTOS */}
+      <div style={sectionStyle}>
+        {sectionTitle('Fotos')}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <FotoUpload label="Horímetro" value={fotoHorimetro} onChange={(f) => handleFoto(setFotoHorimetro, 'FotoHorimetro', f)} onRemove={() => setFotoHorimetro('')} obrigatorio />
+          <FotoUpload label="Chassis" value={fotoChassis} onChange={(f) => handleFoto(setFotoChassis, 'FotoChassis', f)} onRemove={() => setFotoChassis('')} obrigatorio />
+        </div>
+      </div>
+
+      {/* 7. FOTOS GARANTIA (só aparece se tipo = Garantia) */}
+      {tipoServico === 'Garantia' && (
+        <>
+          <div style={sectionStyle}>
+            {sectionTitle('Fotos do Equipamento', '#1E3A5F')}
+            <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10 }}>Obrigatório para garantia</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <FotoUpload label="Frente" value={fotoFrente} onChange={(f) => handleFoto(setFotoFrente, 'FotoFrente', f)} onRemove={() => setFotoFrente('')} obrigatorio />
+              <FotoUpload label="Direita" value={fotoDireita} onChange={(f) => handleFoto(setFotoDireita, 'FotoDireita', f)} onRemove={() => setFotoDireita('')} obrigatorio />
+              <FotoUpload label="Esquerda" value={fotoEsquerda} onChange={(f) => handleFoto(setFotoEsquerda, 'FotoEsquerda', f)} onRemove={() => setFotoEsquerda('')} obrigatorio />
+              <FotoUpload label="Traseira" value={fotoTraseira} onChange={(f) => handleFoto(setFotoTraseira, 'FotoTraseira', f)} onRemove={() => setFotoTraseira('')} obrigatorio />
+              <FotoUpload label="Volante" value={fotoVolante} onChange={(f) => handleFoto(setFotoVolante, 'FotoVolante', f)} onRemove={() => setFotoVolante('')} obrigatorio />
+            </div>
+          </div>
+
+          <div style={sectionStyle}>
+            {sectionTitle('Fotos da Falha', '#C41E2A')}
+            <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10 }}>Pelo menos 1 foto obrigatória</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <FotoUpload label="Falha 1" value={fotoFalha1} onChange={(f) => handleFoto(setFotoFalha1, 'FotoFalha1', f)} onRemove={() => setFotoFalha1('')} obrigatorio />
+              <FotoUpload label="Falha 2" value={fotoFalha2} onChange={(f) => handleFoto(setFotoFalha2, 'FotoFalha2', f)} onRemove={() => setFotoFalha2('')} />
+              <FotoUpload label="Falha 3" value={fotoFalha3} onChange={(f) => handleFoto(setFotoFalha3, 'FotoFalha3', f)} onRemove={() => setFotoFalha3('')} />
+              <FotoUpload label="Falha 4" value={fotoFalha4} onChange={(f) => handleFoto(setFotoFalha4, 'FotoFalha4', f)} onRemove={() => setFotoFalha4('')} />
+            </div>
+          </div>
+
+          <div style={sectionStyle}>
+            {sectionTitle('Fotos das Peças', '#C41E2A')}
+            <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10 }}>Pelo menos 1 foto obrigatória</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <FotoUpload label="Peça Nova 1" value={fotoPecaNova1} onChange={(f) => handleFoto(setFotoPecaNova1, 'FotoPecaNova1', f)} onRemove={() => setFotoPecaNova1('')} obrigatorio />
+              <FotoUpload label="Peça Nova 2" value={fotoPecaNova2} onChange={(f) => handleFoto(setFotoPecaNova2, 'FotoPecaNova2', f)} onRemove={() => setFotoPecaNova2('')} />
+              <FotoUpload label="Instalada 1" value={fotoPecaInstalada1} onChange={(f) => handleFoto(setFotoPecaInstalada1, 'FotoPecaInstalada1', f)} onRemove={() => setFotoPecaInstalada1('')} obrigatorio />
+              <FotoUpload label="Instalada 2" value={fotoPecaInstalada2} onChange={(f) => handleFoto(setFotoPecaInstalada2, 'FotoPecaInstalada2', f)} onRemove={() => setFotoPecaInstalada2('')} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 8. ASSINATURAS */}
+      <div style={sectionStyle}>
+        {sectionTitle('Assinaturas')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <SignaturePad label="Assinatura do Cliente" value={assCliente} onSave={(v) => setAssCliente(v)} allowPhoto />
+          <SignaturePad label="Assinatura do Técnico" value={assTecnico} onSave={(v) => setAssTecnico(v)} />
+        </div>
+      </div>
+
+      {/* 9. RESPONSÁVEL DO TRATOR */}
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Nome do Responsável pelo Trator (cliente)</label>
+        <input type="text" value={nomResp} onChange={(e) => setNomResp(e.target.value)} style={inputStyle}
+          placeholder="Nome de quem é responsável pelo equipamento" />
+      </div>
+
+      {/* 10. PEÇAS / SERVIÇOS EXTRAS (no final, não obrigatório) */}
+      <div style={sectionStyle}>
+        {sectionTitle('Peças ou Serviços Extras', '#D97706')}
+        <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 14, lineHeight: 1.5 }}>
+          Se você usou uma peça a mais ou contratou um serviço de terceiro que não estava previsto, informe aqui. Este campo não é obrigatório.
+        </p>
+
+        {manualItems.length > 0 && (
+          <>
+            {pecas.map((peca, i) => {
+              if (peca.origem !== 'manual') return null
+              return (
+                <div key={i} style={{
+                  background: '#FFFBEB', borderRadius: 12, padding: 14, marginBottom: 10,
+                  border: '1.5px solid #FDE68A',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#FEF3C7', color: '#D97706' }}>
+                      EXTRA
+                    </span>
+                    <button type="button" onClick={() => setPecas(prev => prev.filter((_, idx) => idx !== i))}
+                      style={{ fontSize: 12, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                      Remover
+                    </button>
+                  </div>
+                  <input type="text" value={peca.descricao} placeholder="Descrição do produto/serviço"
+                    onChange={(e) => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, descricao: e.target.value } : p))}
+                    style={{ ...inputStyle, marginBottom: 8 }} />
+                  <div>
+                    <label style={{ fontSize: 11, color: '#6B7280' }}>Qtd</label>
+                    <input type="text" inputMode="numeric" value={peca.qtdUsada}
+                      onChange={(e) => setPecas(prev => prev.map((p, idx) => idx === i ? { ...p, qtdUsada: e.target.value } : p))}
+                      style={inputStyle} placeholder="1" />
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Justificativa obrigatória se tem extras */}
+            <div style={{
+              background: '#FEF2F2', borderRadius: 12, padding: 14, marginBottom: 10,
+              border: '2px solid #FECACA',
+            }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#DC2626', display: 'block', marginBottom: 6 }}>
+                <AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                Por que não avisou antes?
+              </label>
+              <textarea
+                value={justificativaPecaExtra}
+                onChange={(e) => setJustificativaPecaExtra(e.target.value)}
+                rows={2}
+                placeholder="Justifique o motivo de usar peça/serviço sem aviso prévio..."
+                style={{ ...inputStyle, resize: 'vertical', borderColor: '#FECACA' }}
+              />
+            </div>
+          </>
+        )}
+
+        <button type="button" onClick={() => setPecas(prev => [...prev, {
+          descricao: '', codigo: '', qtdUsada: '1', devolvida: false, qtdDevolvida: '',
+          origem: 'manual', qtdOriginal: '', naoUsada: false, revisado: true,
+        }])} style={{
+          padding: '12px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+          border: '2px dashed #FDE68A', background: '#FFFBEB', color: '#D97706', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center',
+        }}>
+          <Plus size={14} /> Adicionar peça/serviço extra
+        </button>
+      </div>
+
+      {/* Aviso se PPV não revisado */}
+      {os?.ID_PPV && !todosRevisados && (
+        <div style={{
+          background: '#FEF2F2', border: '2px solid #FECACA', borderRadius: 12,
+          padding: '14px 16px', marginBottom: 12,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <AlertTriangle size={20} color="#DC2626" />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#DC2626' }}>
+              PPV não revisado
+            </div>
+            <div style={{ fontSize: 12, color: '#991B1B' }}>
+              Clique no PPV acima e revise {ppvItems.filter(p => !p.revisado).length} produto(s) pendente(s) antes de enviar.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOTÃO ENVIAR */}
+      <div style={{ marginBottom: 30 }}>
+        {(() => {
+          const bloqueado = !!os?.ID_PPV && !todosRevisados
+          const motivo = (os?.ID_PPV && !todosRevisados)
+            ? 'Revise o PPV para enviar'
+            : null
+          return (
+            <button
+              type="button"
+              disabled={saving || bloqueado}
+              onClick={enviar}
+              style={{
+                width: '100%', padding: '18px 0', borderRadius: 14,
+                background: bloqueado ? '#9CA3AF' : '#C41E2A',
+                color: '#fff',
+                fontSize: 17, fontWeight: 700, border: 'none',
+                cursor: (saving || bloqueado) ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: bloqueado ? 'none' : '0 6px 20px rgba(196,30,42,0.3)',
+              }}
+            >
+              <Send size={18} />
+              {saving ? 'Enviando...' : motivo || 'Enviar OS'}
+            </button>
+          )
+        })()}
+      </div>
+    </div>
+  )
+}

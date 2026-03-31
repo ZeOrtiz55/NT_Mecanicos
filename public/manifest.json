@@ -1,0 +1,30 @@
+{
+  "name": "Nova Tratores - Mecânicos",
+  "short_name": "NT Mecânicos",
+  "description": "App de campo para técnicos e mecânicos da Nova Tratores",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1E3A5F",
+  "theme_color": "#1E3A5F",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/Logo_Nova.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Logo_Nova.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Logo_Nova.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
