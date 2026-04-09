@@ -5,11 +5,15 @@ import { useCached } from '@/hooks/useCached'
 import { supabase } from '@/lib/supabase'
 import { cacheInvalidate } from '@/lib/cache'
 import {
-  FilePlus, ChevronRight, FileCheck, History,
-  ClipboardList, XCircle, CheckCircle2, Clock, Package,
+  FilePlus, FileCheck, History, ClipboardList, XCircle,
+  CheckCircle2, Clock, Package,
 } from 'lucide-react'
 import Link from 'next/link'
 import { notificarPortalReq } from '@/lib/notificarPortal'
+import {
+  PageHeader, StatCard, TabBar, ListRow, EmptyState, PageSpinner, Badge,
+} from '@/components/ui'
+import { colors, radius, shadow, getStatus } from '@/lib/ui'
 
 interface RequisicaoPOS {
   id: number
@@ -28,15 +32,6 @@ interface ReqData {
   pendentes: RequisicaoPOS[]
   enviadas: RequisicaoPOS[]
   historico: RequisicaoPOS[]
-}
-
-const statusLabel: Record<string, { label: string; bg: string; color: string }> = {
-  pedido: { label: 'Pedido', bg: '#FFF7ED', color: '#D97706' },
-  completa: { label: 'Atualizada', bg: '#ECFDF5', color: '#059669' },
-  cancelada: { label: 'Cancelada', bg: '#FEF2F2', color: '#DC2626' },
-  cancelar: { label: 'Cancelamento', bg: '#FEF2F2', color: '#DC2626' },
-  aguardando: { label: 'Aguardando', bg: '#EFF6FF', color: '#2563EB' },
-  financeiro: { label: 'Financeiro', bg: '#F5F3FF', color: '#7C3AED' },
 }
 
 async function fetchReqData(nome: string, tecnicoNome: string): Promise<ReqData> {
@@ -70,6 +65,16 @@ async function fetchReqData(nome: string, tecnicoNome: string): Promise<ReqData>
   }
 }
 
+/* ─── Card de requisição reutilizável ─── */
+function ReqBadge({ id, status, color = colors.primary }: { id: number; status: string; color?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 14, fontWeight: 700, color }}>#{id}</span>
+      <Badge status={status}>{getStatus(status).label}</Badge>
+    </div>
+  )
+}
+
 export default function RequisicoesHub() {
   const { user } = useCurrentUser()
   const nome = user?.nome_pos || user?.tecnico_nome || ''
@@ -85,8 +90,6 @@ export default function RequisicoesHub() {
   const [cancelando, setCancelando] = useState<number | null>(null)
 
   const { pendentes = [], enviadas = [], historico = [] } = data || {}
-
-  const getSt = (status: string) => statusLabel[status] || { label: status, bg: '#F3F4F6', color: '#6B7280' }
 
   const solicitarCancelamento = async (id: number) => {
     const confirmar = window.confirm('Tem certeza que deseja solicitar o cancelamento desta requisição?')
@@ -111,324 +114,160 @@ export default function RequisicoesHub() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {refreshing && <div className="refresh-bar" />}
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1F2937', margin: 0 }}>
-          Requisições
-        </h1>
-        <Link href="/requisicoes/nova" style={{
-          background: '#C41E2A', borderRadius: 12, padding: '10px 16px',
-          border: 'none', cursor: 'pointer', color: '#fff',
-          display: 'flex', alignItems: 'center', gap: 6,
-          fontSize: 13, fontWeight: 700, textDecoration: 'none',
-          boxShadow: '0 2px 8px rgba(196,30,42,0.25)',
-        }}>
-          <FilePlus size={15} />
-          Nova
-        </Link>
-      </div>
+      <PageHeader
+        title="Requisições"
+        action={
+          <Link href="/requisicoes/nova" style={{
+            background: colors.primary, borderRadius: radius.md, padding: '10px 16px',
+            color: '#fff', textDecoration: 'none',
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 13, fontWeight: 700,
+            boxShadow: shadow.primary,
+          }}>
+            <FilePlus size={15} />
+            Nova
+          </Link>
+        }
+      />
 
-      {/* Resumo */}
+      {/* Métricas */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-        <div style={{
-          background: pendentes.length > 0 ? '#FFF7ED' : '#F9FAFB',
-          borderRadius: 14, padding: '14px 12px', textAlign: 'center',
-          border: pendentes.length > 0 ? '1px solid #FED7AA' : '1px solid #F3F4F6',
-        }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: pendentes.length > 0 ? '#D97706' : '#D1D5DB' }}>
-            {pendentes.length}
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginTop: 2 }}>Pendentes</div>
-        </div>
-        <div style={{
-          background: enviadas.length > 0 ? '#EFF6FF' : '#F9FAFB',
-          borderRadius: 14, padding: '14px 12px', textAlign: 'center',
-          border: enviadas.length > 0 ? '1px solid #BFDBFE' : '1px solid #F3F4F6',
-        }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: enviadas.length > 0 ? '#2563EB' : '#D1D5DB' }}>
-            {enviadas.length}
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginTop: 2 }}>Em aberto</div>
-        </div>
-        <div style={{
-          background: historico.length > 0 ? '#ECFDF5' : '#F9FAFB',
-          borderRadius: 14, padding: '14px 12px', textAlign: 'center',
-          border: historico.length > 0 ? '1px solid #A7F3D0' : '1px solid #F3F4F6',
-        }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: historico.length > 0 ? '#059669' : '#D1D5DB' }}>
-            {historico.length}
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginTop: 2 }}>Histórico</div>
-        </div>
+        <StatCard value={pendentes.length} label="Pendentes" tone="warning" />
+        <StatCard value={enviadas.length} label="Em aberto" tone="info" />
+        <StatCard value={historico.length} label="Histórico" tone="success" />
       </div>
 
-      {/* Abas */}
-      <div style={{
-        display: 'flex', gap: 0,
-        background: '#F3F4F6', borderRadius: 14, padding: 4,
-      }}>
-        <button
-          onClick={() => setAba('atualizar')}
-          style={{
-            flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 700,
-            border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-            background: aba === 'atualizar' ? '#fff' : 'transparent',
-            color: aba === 'atualizar' ? '#1F2937' : '#9CA3AF',
-            boxShadow: aba === 'atualizar' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            position: 'relative',
-          }}
-        >
-          Atualizar
-          {pendentes.length > 0 && (
-            <span style={{
-              position: 'absolute', top: 3, right: 8,
-              background: '#EF4444', color: '#fff', fontSize: 9,
-              fontWeight: 700, borderRadius: 10, minWidth: 18,
-              height: 18, display: 'inline-flex', alignItems: 'center',
-              justifyContent: 'center', padding: '0 4px',
-            }}>
-              {pendentes.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setAba('enviadas')}
-          style={{
-            flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 700,
-            border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-            background: aba === 'enviadas' ? '#fff' : 'transparent',
-            color: aba === 'enviadas' ? '#1F2937' : '#9CA3AF',
-            boxShadow: aba === 'enviadas' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-          }}
-        >
-          Enviadas
-        </button>
-        <button
-          onClick={() => setAba('historico')}
-          style={{
-            flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 700,
-            border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-            background: aba === 'historico' ? '#fff' : 'transparent',
-            color: aba === 'historico' ? '#1F2937' : '#9CA3AF',
-            boxShadow: aba === 'historico' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-          }}
-        >
-          Histórico
-        </button>
-      </div>
+      {/* Tabs */}
+      <TabBar
+        value={aba}
+        onChange={setAba}
+        options={[
+          { value: 'atualizar', label: 'Atualizar', badgeCount: pendentes.length },
+          { value: 'enviadas', label: 'Enviadas' },
+          { value: 'historico', label: 'Histórico' },
+        ]}
+      />
 
-      {/* === ABA ATUALIZAR === */}
+      {/* ═══ ABA ATUALIZAR ═══ */}
       {aba === 'atualizar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+            <PageSpinner />
           ) : pendentes.length === 0 ? (
-            <div style={{
-              background: '#fff', borderRadius: 18, padding: 48, textAlign: 'center',
-              border: '1px solid #F3F4F6',
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 16, background: '#ECFDF5',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 14px',
-              }}>
-                <CheckCircle2 size={28} color="#059669" />
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#059669' }}>Tudo em dia!</div>
-              <div style={{ fontSize: 13, color: '#D1D5DB', marginTop: 4 }}>Nenhuma pendente de atualização</div>
-            </div>
+            <EmptyState
+              icon={CheckCircle2}
+              title="Tudo em dia!"
+              subtitle="Nenhuma pendente de atualização"
+              tone="success"
+            />
           ) : (
-            <>
-              {pendentes.map((req) => (
-                <Link key={req.id} href={`/requisicoes/atualizar/${req.id}`} style={{
-                  background: '#fff', borderRadius: 16, padding: '14px 16px',
-                  textDecoration: 'none', color: 'inherit',
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  border: '1px solid #F3F4F6',
-                }}>
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                    background: '#FFF7ED',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Clock size={20} color="#D97706" />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: '#C41E2A' }}>#{req.id}</span>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
-                        background: '#FFF7ED', color: '#D97706',
-                        textTransform: 'uppercase', letterSpacing: 0.5,
-                      }}>Pendente</span>
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {req.titulo}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
-                      {req.tipo} · {new Date(req.data).toLocaleDateString('pt-BR')}
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="#D1D5DB" style={{ flexShrink: 0 }} />
-                </Link>
-              ))}
-            </>
+            pendentes.map((req) => (
+              <ListRow
+                key={req.id}
+                href={`/requisicoes/atualizar/${req.id}`}
+                icon={Clock}
+                iconColor={colors.warning}
+                iconBg={colors.warningBg}
+                badge={<ReqBadge id={req.id} status="pendente" />}
+                title={req.titulo}
+                subtitle={`${req.tipo} · ${new Date(req.data).toLocaleDateString('pt-BR')}`}
+              />
+            ))
           )}
         </div>
       )}
 
-      {/* === ABA ENVIADAS === */}
+      {/* ═══ ABA ENVIADAS ═══ */}
       {aba === 'enviadas' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+            <PageSpinner />
           ) : enviadas.length === 0 ? (
-            <div style={{
-              background: '#fff', borderRadius: 18, padding: 48, textAlign: 'center',
-              border: '1px solid #F3F4F6',
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 16, background: '#F9FAFB',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 14px',
-              }}>
-                <Package size={28} color="#D1D5DB" />
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#9CA3AF' }}>Nenhuma requisição enviada</div>
-              <div style={{ fontSize: 13, color: '#D1D5DB', marginTop: 4 }}>Suas solicitações aparecerão aqui</div>
-            </div>
+            <EmptyState
+              icon={Package}
+              title="Nenhuma requisição enviada"
+              subtitle="Suas solicitações aparecerão aqui"
+            />
           ) : (
-            <>
-              {enviadas.map((req) => {
-                const st = getSt(req.status)
-                const podeCancelar = req.status === 'pedido'
-
-                return (
-                  <div key={req.id} style={{
-                    background: '#fff', borderRadius: 16, padding: '14px 16px',
-                    border: '1px solid #F3F4F6',
-                  }}>
-                    <Link href={`/requisicoes/atualizar/${req.id}`} style={{
-                      textDecoration: 'none', color: 'inherit',
-                      display: 'flex', alignItems: 'center', gap: 12,
-                    }}>
-                      <div style={{
-                        width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                        background: st.bg,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <ClipboardList size={20} color={st.color} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                          <span style={{ fontSize: 15, fontWeight: 700, color: '#C41E2A' }}>#{req.id}</span>
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
-                            background: st.bg, color: st.color,
-                            textTransform: 'uppercase', letterSpacing: 0.5,
-                          }}>{st.label}</span>
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {req.titulo}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
-                          {req.tipo} · {req.data ? new Date(req.data).toLocaleDateString('pt-BR') : ''}
-                        </div>
-                      </div>
-                      <ChevronRight size={18} color="#D1D5DB" style={{ flexShrink: 0 }} />
-                    </Link>
-
-                    {podeCancelar && (
+            enviadas.map((req) => {
+              const st = getStatus(req.status)
+              const podeCancelar = req.status === 'pedido'
+              return (
+                <div key={req.id} style={{
+                  background: colors.surface,
+                  borderRadius: radius.xl,
+                  border: `1px solid ${colors.border}`,
+                  overflow: 'hidden',
+                }}>
+                  <ListRow
+                    href={`/requisicoes/atualizar/${req.id}`}
+                    icon={ClipboardList}
+                    iconColor={st.color}
+                    iconBg={st.bg}
+                    badge={<ReqBadge id={req.id} status={req.status} />}
+                    title={req.titulo}
+                    subtitle={`${req.tipo} · ${req.data ? new Date(req.data).toLocaleDateString('pt-BR') : ''}`}
+                  />
+                  {podeCancelar && (
+                    <div style={{ padding: '0 14px 12px' }}>
                       <button
                         onClick={() => solicitarCancelamento(req.id)}
                         disabled={cancelando === req.id}
                         style={{
-                          marginTop: 10, width: '100%', padding: '10px 0',
-                          borderRadius: 10, border: '1px solid #FECACA',
-                          background: cancelando === req.id ? '#FEF2F2' : '#fff',
-                          color: '#DC2626', fontSize: 13, fontWeight: 700,
+                          width: '100%', padding: '9px 0',
+                          borderRadius: radius.md,
+                          border: `1px solid ${colors.dangerBorder}`,
+                          background: cancelando === req.id ? colors.dangerBg : colors.surface,
+                          color: colors.danger, fontSize: 12, fontWeight: 700,
                           cursor: cancelando === req.id ? 'not-allowed' : 'pointer',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          transition: 'all 0.2s',
                         }}
                       >
-                        <XCircle size={14} />
+                        <XCircle size={13} />
                         {cancelando === req.id ? 'Cancelando...' : 'Solicitar Cancelamento'}
                       </button>
-                    )}
-                  </div>
-                )
-              })}
-            </>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}
 
-      {/* === ABA HISTÓRICO === */}
+      {/* ═══ ABA HISTÓRICO ═══ */}
       {aba === 'historico' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+            <PageSpinner />
           ) : historico.length === 0 ? (
-            <div style={{
-              background: '#fff', borderRadius: 18, padding: 48, textAlign: 'center',
-              border: '1px solid #F3F4F6',
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 16, background: '#F9FAFB',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 14px',
-              }}>
-                <History size={28} color="#D1D5DB" />
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#9CA3AF' }}>Nenhuma no histórico</div>
-            </div>
+            <EmptyState icon={History} title="Nenhuma no histórico" />
           ) : (
-            <>
-              {historico.map((req) => {
-                const st = getSt(req.status)
-                return (
-                  <div key={req.id} style={{
-                    background: '#fff', borderRadius: 16, padding: '14px 16px',
-                    border: '1px solid #F3F4F6',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                  }}>
-                    <div style={{
-                      width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                      background: st.bg,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <FileCheck size={20} color={st.color} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: '#1E3A5F' }}>#{req.id}</span>
-                        <span style={{
-                          fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
-                          background: st.bg, color: st.color,
-                          textTransform: 'uppercase', letterSpacing: 0.5,
-                        }}>{st.label}</span>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1F2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {req.titulo}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
-                        {req.tipo} · {new Date(req.data).toLocaleDateString('pt-BR')}
-                        {req.fornecedor && (
-                          <span style={{ color: '#059669', fontWeight: 600 }}>
-                            {' '}· {req.fornecedor}
-                            {req.valor_despeza ? ` · R$ ${Number(req.valor_despeza).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </>
+            historico.map((req) => {
+              const st = getStatus(req.status)
+              return (
+                <ListRow
+                  key={req.id}
+                  icon={FileCheck}
+                  iconColor={st.color}
+                  iconBg={st.bg}
+                  badge={<ReqBadge id={req.id} status={req.status} color={colors.accent} />}
+                  title={req.titulo}
+                  subtitle={`${req.tipo} · ${new Date(req.data).toLocaleDateString('pt-BR')}`}
+                  meta={
+                    req.fornecedor && (
+                      <span style={{ color: colors.success, fontWeight: 600 }}>
+                        {req.fornecedor}
+                        {req.valor_despeza ? ` · R$ ${Number(req.valor_despeza).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
+                      </span>
+                    )
+                  }
+                />
+              )
+            })
           )}
         </div>
       )}

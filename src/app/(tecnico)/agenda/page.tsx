@@ -1,8 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { TURNOS } from '@/lib/constants'
-import type { OrdemServico } from '@/lib/types'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import {
   ChevronLeft,
@@ -17,8 +15,9 @@ import {
   CheckCircle,
   Send,
   Wrench,
-  FileText,
   Package,
+  Truck,
+  StickyNote,
 } from 'lucide-react'
 
 interface MovimentacaoPPV {
@@ -39,43 +38,52 @@ interface RequisicaoOS {
   status: string
 }
 
-interface AgendaUnificada {
-  id: string
-  id_ordem: string | null
+interface AgendaRow {
+  id: number
   data: string
+  tecnico_nome: string
+  id_ordem: string | null
   cliente: string
-  cidade: string
+  servico: string
   endereco: string
-  tipo_servico: string
-  projeto: string
-  status_os: string
-  turno: string | null
-  hora_inicio: string | null
-  hora_fim: string | null
-  origem: 'pos' | 'agenda'
-  id_ppv: string
-  serv_solicitado: string
-  qtd_hr: number | null
-  qtd_km: number | null
-  descricao_agenda: string
-  revisao: string
-  valor_total: number | null
-  previsao_execucao: string
+  cidade: string
+  coordenadas: { lat: number; lng: number } | null
+  tempo_ida_min: number
+  distancia_ida_km: number
+  tempo_volta_min: number
+  distancia_volta_km: number
+  qtd_horas: number
+  ordem_sequencia: number
+  status: string
+  observacoes: string
+}
+
+interface OsDetalhes {
+  Tipo_Servico?: string | null
+  Projeto?: string | null
+  Revisao?: string | null
+  ID_PPV?: string | null
+  Qtd_HR?: number | null
+  Qtd_KM?: number | null
+  Serv_Solicitado?: string | null
+  Status?: string | null
 }
 
 export default function AgendaTecnicoPage() {
   const { user, loading: userLoading } = useCurrentUser()
-  const [items, setItems] = useState<AgendaUnificada[]>([])
+  const [items, setItems] = useState<AgendaRow[]>([])
+  const [notas, setNotas] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [semanaOffset, setSemanaOffset] = useState(0)
   const [diaSelecionado, setDiaSelecionado] = useState<string>('')
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [osCache, setOsCache] = useState<Record<string, OsDetalhes>>({})
   const [pecasCache, setPecasCache] = useState<Record<string, MovimentacaoPPV[]>>({})
   const [reqCache, setReqCache] = useState<Record<string, RequisicaoOS[]>>({})
-  const [loadingDetails, setLoadingDetails] = useState<string | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState<number | null>(null)
 
   // Form state
   const [cliente, setCliente] = useState('')
@@ -86,13 +94,15 @@ export default function AgendaTecnicoPage() {
 
   const hojeStr = new Date().toISOString().split('T')[0]
 
+  // Semana de segunda a sábado (igual ao portal BlocoAgenda)
   const semana = useMemo(() => {
     const hoje = new Date()
-    hoje.setDate(hoje.getDate() + semanaOffset * 7)
-    const seg = new Date(hoje)
-    seg.setDate(hoje.getDate() - hoje.getDay() + 1)
+    const day = hoje.getDay()
+    const diff = hoje.getDate() - day + (day === 0 ? -6 : 1) + semanaOffset * 7
+    const seg = new Date(hoje.getFullYear(), hoje.getMonth(), diff)
+    seg.setHours(0, 0, 0, 0)
     const dias: Date[] = []
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 6; i++) {
       const d = new Date(seg)
       d.setDate(seg.getDate() + i)
       dias.push(d)
@@ -113,126 +123,74 @@ export default function AgendaTecnicoPage() {
   useEffect(() => {
     if (!user) return
     const nome = user.nome_pos || user.tecnico_nome
+    if (!nome) return
 
     const carregar = async () => {
       setLoading(true)
       const inicio = semana[0].toISOString().split('T')[0]
-      const fim = semana[6].toISOString().split('T')[0]
+      const fim = semana[semana.length - 1].toISOString().split('T')[0]
 
-      const { data: osData } = await supabase
-        .from('Ordem_Servico')
-        .select('*')
-        .not('Status', 'in', '("Concluída","Cancelada","Concluida","cancelada")')
-        .gte('Previsao_Execucao', inicio)
-        .lte('Previsao_Execucao', fim)
-        .or(`Os_Tecnico.ilike.%${nome}%,Os_Tecnico2.ilike.%${nome}%`)
-        .order('Previsao_Execucao')
-
+      // Agenda (espelho do painel mecânicos do portal)
       const { data: agendaData } = await supabase
-        .from('agenda_tecnico')
+        .from('agenda_visao')
         .select('*')
         .eq('tecnico_nome', nome)
-        .gte('data_agendada', inicio)
-        .lte('data_agendada', fim)
-        .order('data_agendada')
-        .order('hora_inicio')
+        .gte('data', inicio)
+        .lte('data', fim)
+        .order('data')
+        .order('ordem_sequencia')
 
-      const osList = (osData || []) as OrdemServico[]
-      const cnpjs = [...new Set(osList.map(o => o.Cnpj_Cliente).filter(Boolean))]
-      let cidadeMap: Record<string, string> = {}
-      if (cnpjs.length > 0) {
-        const { data: cliData } = await supabase
-          .from('Clientes')
-          .select('cnpj_cpf, cidade')
-          .in('cnpj_cpf', cnpjs)
-        if (cliData) {
-          cliData.forEach((c: { cnpj_cpf: string; cidade: string | null }) => {
-            if (c.cidade) cidadeMap[c.cnpj_cpf] = c.cidade
-          })
-        }
+      // Notas do dia (por técnico)
+      const { data: notasData } = await supabase
+        .from('agenda_notas')
+        .select('data, nota')
+        .eq('tecnico_nome', nome)
+        .gte('data', inicio)
+        .lte('data', fim)
+
+      const notasMap: Record<string, string> = {}
+      for (const n of (notasData || [])) {
+        if (n.nota) notasMap[n.data] = n.nota
       }
 
-      const unificada: AgendaUnificada[] = []
-      const osIdsNaAgenda = new Set((agendaData || []).map((a: { id_ordem: string | null }) => a.id_ordem).filter(Boolean))
-
-      for (const os of osList) {
-        if (osIdsNaAgenda.has(os.Id_Ordem)) continue
-        unificada.push({
-          id: `pos_${os.Id_Ordem}`,
-          id_ordem: os.Id_Ordem,
-          data: os.Previsao_Execucao,
-          cliente: os.Os_Cliente,
-          cidade: cidadeMap[os.Cnpj_Cliente] || '',
-          endereco: os.Endereco_Cliente || '',
-          tipo_servico: os.Tipo_Servico || '',
-          projeto: os.Projeto || '',
-          status_os: os.Status,
-          turno: null,
-          hora_inicio: null,
-          hora_fim: null,
-          origem: 'pos',
-          id_ppv: os.ID_PPV || '',
-          serv_solicitado: os.Serv_Solicitado || '',
-          qtd_hr: os.Qtd_HR,
-          qtd_km: os.Qtd_KM,
-          descricao_agenda: '',
-          revisao: os.Revisao || '',
-          valor_total: os.Valor_Total,
-          previsao_execucao: os.Previsao_Execucao || '',
-        })
-      }
-
-      for (const ag of (agendaData || [])) {
-        unificada.push({
-          id: `ag_${ag.id}`,
-          id_ordem: ag.id_ordem,
-          data: ag.data_agendada,
-          cliente: ag.cliente || '',
-          cidade: '',
-          endereco: ag.endereco || '',
-          tipo_servico: '',
-          projeto: '',
-          status_os: ag.status,
-          turno: ag.turno,
-          hora_inicio: ag.hora_inicio,
-          hora_fim: ag.hora_fim,
-          origem: 'agenda',
-          id_ppv: '',
-          serv_solicitado: '',
-          qtd_hr: null,
-          qtd_km: null,
-          descricao_agenda: ag.descricao || '',
-          revisao: '',
-          valor_total: null,
-          previsao_execucao: ag.data_agendada || '',
-        })
-      }
-
-      unificada.sort((a, b) => a.data.localeCompare(b.data) || (a.hora_inicio || '').localeCompare(b.hora_inicio || ''))
-      setItems(unificada)
+      setItems((agendaData || []) as AgendaRow[])
+      setNotas(notasMap)
       setLoading(false)
     }
     carregar()
   }, [semana, user])
 
-  const toggleExpand = useCallback(async (item: AgendaUnificada) => {
+  const toggleExpand = useCallback(async (item: AgendaRow) => {
     if (expandedId === item.id) {
       setExpandedId(null)
       return
     }
     setExpandedId(item.id)
 
-    if (item.id_ppv && !pecasCache[item.id_ppv]) {
-      setLoadingDetails(item.id)
-      const { data: movs } = await supabase
-        .from('movimentacoes')
-        .select('*')
-        .eq('Id_PPV', item.id_ppv)
-      setPecasCache(prev => ({ ...prev, [item.id_ppv]: (movs || []) as MovimentacaoPPV[] }))
+    if (!item.id_ordem) return
+    setLoadingDetails(item.id)
+
+    // Detalhes da OS
+    if (!osCache[item.id_ordem]) {
+      const { data: os } = await supabase
+        .from('Ordem_Servico')
+        .select('Tipo_Servico, Projeto, Revisao, ID_PPV, Qtd_HR, Qtd_KM, Serv_Solicitado, Status')
+        .eq('Id_Ordem', item.id_ordem)
+        .single()
+      if (os) {
+        setOsCache(prev => ({ ...prev, [item.id_ordem!]: os as OsDetalhes }))
+        if (os.ID_PPV && !pecasCache[os.ID_PPV]) {
+          const { data: movs } = await supabase
+            .from('movimentacoes')
+            .select('*')
+            .eq('Id_PPV', os.ID_PPV)
+          setPecasCache(prev => ({ ...prev, [os.ID_PPV as string]: (movs || []) as MovimentacaoPPV[] }))
+        }
+      }
     }
 
-    if (item.id_ordem && !reqCache[item.id_ordem]) {
-      setLoadingDetails(item.id)
+    // Requisições vinculadas
+    if (!reqCache[item.id_ordem]) {
       const { data: reqs } = await supabase
         .from('mecanico_requisicoes')
         .select('id, material_solicitado, quantidade, urgencia, status')
@@ -241,7 +199,7 @@ export default function AgendaTecnicoPage() {
     }
 
     setLoadingDetails(null)
-  }, [expandedId, pecasCache, reqCache])
+  }, [expandedId, osCache, pecasCache, reqCache])
 
   const resetForm = () => {
     setCliente('')
@@ -311,10 +269,12 @@ export default function AgendaTecnicoPage() {
   // Itens filtrados pelo dia selecionado
   const itensDoDia = useMemo(() => {
     if (!diaSelecionado) return []
-    return items.filter(i => i.data === diaSelecionado)
+    return items.filter(i => i.data === diaSelecionado).sort((a, b) => a.ordem_sequencia - b.ordem_sequencia)
   }, [items, diaSelecionado])
 
-  // Contagem de itens por dia (para mostrar dots)
+  const notaDoDia = diaSelecionado ? notas[diaSelecionado] : ''
+
+  // Contagem de itens por dia
   const contagemPorDia = useMemo(() => {
     const map: Record<string, number> = {}
     for (const item of items) {
@@ -378,7 +338,7 @@ export default function AgendaTecnicoPage() {
           </button>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937', textTransform: 'capitalize' }}>
-              {semana[3].toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              {semana[2].toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </div>
             {semanaOffset !== 0 && (
               <button
@@ -401,8 +361,8 @@ export default function AgendaTecnicoPage() {
           </button>
         </div>
 
-        {/* Dias da semana */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+        {/* Dias da semana (seg-sáb) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 4 }}>
           {semana.map((d) => {
             const dStr = d.toISOString().split('T')[0]
             const isHoje = dStr === hojeStr
@@ -453,7 +413,7 @@ export default function AgendaTecnicoPage() {
           marginBottom: 10,
         }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>
-            {diaSelecionado === hojeStr ? 'Hoje' : new Date(diaSelecionado + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' })}
+            {diaSelecionado === hojeStr ? 'Hoje' : diaSelecionado ? new Date(diaSelecionado + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' }) : ''}
           </span>
           <span style={{
             fontSize: 12, fontWeight: 700, color: '#9CA3AF',
@@ -461,6 +421,18 @@ export default function AgendaTecnicoPage() {
             {itensDoDia.length} {itensDoDia.length === 1 ? 'item' : 'itens'}
           </span>
         </div>
+
+        {/* Nota do dia (vinda do painel) */}
+        {notaDoDia && (
+          <div style={{
+            background: '#EEF2FF', borderRadius: 12, padding: '10px 14px',
+            marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 8,
+            border: '1px solid #C7D2FE',
+          }}>
+            <StickyNote size={14} color="#6366F1" style={{ marginTop: 2, flexShrink: 0 }} />
+            <div style={{ fontSize: 13, color: '#4338CA', lineHeight: 1.4 }}>{notaDoDia}</div>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
@@ -479,18 +451,11 @@ export default function AgendaTecnicoPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {itensDoDia.map((item) => {
-              const isPOS = item.origem === 'pos'
               const isExpanded = expandedId === item.id
               const isLoadingThis = loadingDetails === item.id
-              const pecas = item.id_ppv ? (pecasCache[item.id_ppv] || []) : []
+              const os = item.id_ordem ? osCache[item.id_ordem] : undefined
+              const pecas = os?.ID_PPV ? (pecasCache[os.ID_PPV] || []) : []
               const requisicoes = item.id_ordem ? (reqCache[item.id_ordem] || []) : []
-              const turnoInfo = item.turno ? TURNOS[item.turno as keyof typeof TURNOS] : null
-
-              const horario = item.hora_inicio
-                ? `${item.hora_inicio}${item.hora_fim ? ' - ' + item.hora_fim : ''}`
-                : turnoInfo
-                  ? turnoInfo.label
-                  : isPOS ? 'Sem horário' : null
 
               return (
                 <div
@@ -508,46 +473,54 @@ export default function AgendaTecnicoPage() {
                       display: 'flex', alignItems: 'center', gap: 12,
                     }}
                   >
-                    {/* Ícone */}
+                    {/* Badge de sequência */}
                     <div style={{
-                      width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-                      background: isPOS ? '#FEF2F2' : '#EFF6FF',
+                      width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                      background: '#FEF2F2', color: '#C41E2A',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 15, fontWeight: 800,
                     }}>
-                      {isPOS
-                        ? <Wrench size={20} color="#C41E2A" />
-                        : <FileText size={20} color="#1E3A5F" />
-                      }
+                      {item.ordem_sequencia + 1}
                     </div>
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
                         {item.id_ordem && (
-                          <span style={{ fontSize: 13, fontWeight: 700, color: isPOS ? '#C41E2A' : '#1E3A5F' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#C41E2A' }}>
                             {item.id_ordem}
                           </span>
                         )}
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
-                          background: isPOS ? '#FEF2F2' : '#EFF6FF',
-                          color: isPOS ? '#C41E2A' : '#2563EB',
-                        }}>
-                          {isPOS ? item.status_os : 'Agendado'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1F2937', marginBottom: 2 }}>
-                        {item.cliente || 'Serviço'}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {horario && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <Clock size={11} /> {horario}
+                        {item.qtd_horas > 0 && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+                            background: '#F3F4F6', color: '#4B5563',
+                            display: 'flex', alignItems: 'center', gap: 3,
+                          }}>
+                            <Clock size={10} /> {item.qtd_horas}h
                           </span>
                         )}
+                      </div>
+                      <div style={{
+                        fontSize: 14, fontWeight: 600, color: '#1F2937',
+                        marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item.cliente || 'Serviço'}
+                      </div>
+                      {item.servico && (
+                        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.servico}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         {(item.cidade || item.endereco) && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                             <MapPin size={11} /> {item.cidade || item.endereco}
+                          </span>
+                        )}
+                        {item.tempo_ida_min > 0 && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <Truck size={11} /> {item.tempo_ida_min} min · {item.distancia_ida_km.toFixed(0)} km
                           </span>
                         )}
                       </div>
@@ -574,90 +547,89 @@ export default function AgendaTecnicoPage() {
                         </div>
                       )}
 
-                      {/* Info da OS */}
-                      {isPOS && (
+                      {/* Observação do painel */}
+                      {item.observacoes && (
                         <div style={{
-                          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px',
-                          padding: '14px 0', fontSize: 13,
+                          background: '#FFFBEB', borderRadius: 10, padding: '10px 12px',
+                          marginTop: 12, border: '1px solid #FDE68A',
+                          display: 'flex', alignItems: 'flex-start', gap: 8,
                         }}>
-                          {item.tipo_servico && (
-                            <div>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Tipo</div>
-                              <div style={{ fontWeight: 600, color: '#1F2937' }}>{item.tipo_servico}</div>
-                            </div>
-                          )}
-                          {item.projeto && (
-                            <div>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Projeto</div>
-                              <div style={{ fontWeight: 600, color: '#1F2937' }}>{item.projeto}</div>
-                            </div>
-                          )}
-                          {item.revisao && (
-                            <div>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Revisão</div>
-                              <div style={{ fontWeight: 600, color: '#1F2937' }}>{item.revisao}</div>
-                            </div>
-                          )}
-                          {item.id_ppv && (
-                            <div>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>PPV</div>
-                              <div style={{ fontWeight: 600, color: '#1E3A5F' }}>{item.id_ppv}</div>
-                            </div>
-                          )}
-                          {item.qtd_hr != null && item.qtd_hr > 0 && (
-                            <div>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Horas prev.</div>
-                              <div style={{ fontWeight: 600, color: '#1F2937' }}>{item.qtd_hr}h</div>
-                            </div>
-                          )}
-                          {item.qtd_km != null && item.qtd_km > 0 && (
-                            <div>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>KM prev.</div>
-                              <div style={{ fontWeight: 600, color: '#1F2937' }}>{item.qtd_km} km</div>
-                            </div>
-                          )}
-                          {item.endereco && (
-                            <div style={{ gridColumn: '1 / -1' }}>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Endereço</div>
-                              <div style={{ fontWeight: 500, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <MapPin size={12} /> {item.endereco}{item.cidade ? `, ${item.cidade}` : ''}
-                              </div>
-                            </div>
-                          )}
-                          {item.serv_solicitado && (
-                            <div style={{ gridColumn: '1 / -1' }}>
-                              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Serviço solicitado</div>
-                              <div style={{ fontWeight: 500, color: '#374151', lineHeight: 1.4 }}>
-                                {item.serv_solicitado}
-                              </div>
-                            </div>
-                          )}
+                          <StickyNote size={13} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
+                          <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.4 }}>
+                            {item.observacoes}
+                          </div>
                         </div>
                       )}
 
-                      {/* Descrição (agenda_tecnico) */}
-                      {!isPOS && item.descricao_agenda && (
-                        <div style={{
-                          padding: '14px 0', fontSize: 13, color: '#374151', lineHeight: 1.5,
-                        }}>
-                          {item.descricao_agenda}
-                        </div>
-                      )}
-
-                      {/* Turno/horário detalhado */}
-                      {turnoInfo && (
-                        <div style={{
-                          fontSize: 12, color: '#6B7280', paddingBottom: 8,
-                          display: 'flex', alignItems: 'center', gap: 4,
-                        }}>
-                          <Clock size={13} /> {turnoInfo.label} ({turnoInfo.horario})
-                          {item.hora_inicio ? ` · Início: ${item.hora_inicio}` : ''}
-                          {item.hora_fim ? ` · Fim: ${item.hora_fim}` : ''}
-                        </div>
-                      )}
+                      {/* Grid de info */}
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px',
+                        padding: '14px 0', fontSize: 13,
+                      }}>
+                        {os?.Tipo_Servico && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Tipo</div>
+                            <div style={{ fontWeight: 600, color: '#1F2937' }}>{os.Tipo_Servico}</div>
+                          </div>
+                        )}
+                        {os?.Projeto && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Projeto</div>
+                            <div style={{ fontWeight: 600, color: '#1F2937' }}>{os.Projeto}</div>
+                          </div>
+                        )}
+                        {os?.Revisao && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Revisão</div>
+                            <div style={{ fontWeight: 600, color: '#1F2937' }}>{os.Revisao}</div>
+                          </div>
+                        )}
+                        {os?.ID_PPV && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>PPV</div>
+                            <div style={{ fontWeight: 600, color: '#1E3A5F' }}>{os.ID_PPV}</div>
+                          </div>
+                        )}
+                        {os?.Qtd_HR != null && os.Qtd_HR > 0 && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Horas OS</div>
+                            <div style={{ fontWeight: 600, color: '#1F2937' }}>{os.Qtd_HR}h</div>
+                          </div>
+                        )}
+                        {os?.Qtd_KM != null && os.Qtd_KM > 0 && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>KM prev.</div>
+                            <div style={{ fontWeight: 600, color: '#1F2937' }}>{os.Qtd_KM} km</div>
+                          </div>
+                        )}
+                        {item.tempo_volta_min > 0 && (
+                          <div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Volta</div>
+                            <div style={{ fontWeight: 600, color: '#1F2937' }}>
+                              {item.tempo_volta_min} min · {item.distancia_volta_km.toFixed(0)} km
+                            </div>
+                          </div>
+                        )}
+                        {item.endereco && (
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Endereço</div>
+                            <div style={{ fontWeight: 500, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <MapPin size={12} /> {item.endereco}{item.cidade ? `, ${item.cidade}` : ''}
+                            </div>
+                          </div>
+                        )}
+                        {os?.Serv_Solicitado && (
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2 }}>Serviço solicitado</div>
+                            <div style={{ fontWeight: 500, color: '#374151', lineHeight: 1.4 }}>
+                              {os.Serv_Solicitado}
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Peças */}
-                      {isPOS && item.id_ppv && pecas.length > 0 && (
+                      {pecas.length > 0 && (
                         <div style={{
                           background: '#FFF7ED', borderRadius: 12, padding: 14, marginTop: 8,
                         }}>
@@ -688,15 +660,15 @@ export default function AgendaTecnicoPage() {
                       )}
 
                       {/* Requisições */}
-                      {item.id_ordem && requisicoes.length > 0 && (
+                      {requisicoes.length > 0 && (
                         <div style={{
                           background: '#F0F9FF', borderRadius: 12, padding: 14, marginTop: 8,
                         }}>
                           <div style={{
+                            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
                             fontSize: 11, fontWeight: 700, color: '#0369A1', textTransform: 'uppercase',
-                            marginBottom: 10,
                           }}>
-                            Requisições ({requisicoes.length})
+                            <Wrench size={13} /> Requisições ({requisicoes.length})
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {requisicoes.map((r) => (

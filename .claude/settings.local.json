@@ -115,7 +115,18 @@
       "Bash(git remote:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(find \"C:\\\\projetos\\\\portal/src/hooks\" -type f -name \"*mecanico*\" -o -name \"*permis*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:\\\\projetos\\\\portal/src/app/api\" -type f -name \"*.ts\" 2>/dev/null | grep -i mecanico)",
+      "Bash(ls -la \"C:\\\\projetos\\\\portal/src/app/\\(portal\\)/painel-mecanicos/\" 2>/dev/null)",
+      "Bash(ls -la /c/projetos/portal/src/app/\\\\\\(portal\\\\\\)/ 2>/dev/null)",
+      "Bash(find /c/projetos/mecanicos/src/app/\\\\\\(tecnico\\\\\\) -name \"page.tsx\" -o -name \"layout.tsx\" | xargs wc -l | sort -n)",
+      "Bash(ls \"C:\\\\projetos\\\\portal\\\\src\\\\app\\\\\\(portal\\)\\\\ppv\" 2>/dev/null && ls \"C:\\\\projetos\\\\portal\\\\src\\\\app\\\\api\\\\ppv\" 2>/dev/null)",
+      "Bash(ls \"C:\\\\projetos\\\\portal\\\\.env\"* 2>/dev/null)",
+      "Bash(curl -s \"https://citrhumdkfivdzbmayde.supabase.co/rest/v1/movimentacoes?Id_PPV=eq.PPV-0166&select=CodProduto,Descricao,TipoMovimento,Qtde\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdHJodW1ka2ZpdmR6Ym1heWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMDgyNzUsImV4cCI6MjA4NDY4NDI3NX0.83x3-NrKoJgtIuSE7Jjsaj0zH-b-XJ3Z8i3XkBkwVoU\")",
+      "Bash(curl -s \"https://citrhumdkfivdzbmayde.supabase.co/rest/v1/Produtos_Completos?Codigo_Produto=eq.6202&select=*\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdHJodW1ka2ZpdmR6Ym1heWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMDgyNzUsImV4cCI6MjA4NDY4NDI3NX0.83x3-NrKoJgtIuSE7Jjsaj0zH-b-XJ3Z8i3XkBkwVoU\")",
+      "Bash(curl -s \"https://citrhumdkfivdzbmayde.supabase.co/rest/v1/Produtos_Completos?Empresa=eq.Castro%20Pe%C3%A7as&conta_omie=eq.NOVA&select=Codigo_Produto,Empresa,conta_omie&limit=20\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdHJodW1ka2ZpdmR6Ym1heWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMDgyNzUsImV4cCI6MjA4NDY4NDI3NX0.83x3-NrKoJgtIuSE7Jjsaj0zH-b-XJ3Z8i3XkBkwVoU\")",
+      "Bash(curl -s \"https://citrhumdkfivdzbmayde.supabase.co/rest/v1/Produtos_Completos?Codigo_Produto=ilike.*6202*&select=id_omie,Codigo_Produto,Descricao_Produto,Empresa,conta_omie\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdHJodW1ka2ZpdmR6Ym1heWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMDgyNzUsImV4cCI6MjA4NDY4NDI3NX0.83x3-NrKoJgtIuSE7Jjsaj0zH-b-XJ3Z8i3XkBkwVoU\")"
     ]
   }
 }
