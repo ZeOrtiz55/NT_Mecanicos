@@ -144,7 +144,9 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
       if (d.horaChegada && d.horaSaida) {
         const [hi, mi] = d.horaChegada.split(':').map(Number)
         const [hf, mf] = d.horaSaida.split(':').map(Number)
-        total += (hf * 60 + mf) - (hi * 60 + mi)
+        let diff = (hf * 60 + mf) - (hi * 60 + mi)
+        if (diff < 0) diff += 24 * 60
+        total += diff
       }
     }
     if (total <= 0) return ''

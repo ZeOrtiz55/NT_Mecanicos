@@ -244,7 +244,9 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
       if (d.horaInicio && d.horaFim) {
         const [hi, mi] = d.horaInicio.split(':').map(Number)
         const [hf, mf] = d.horaFim.split(':').map(Number)
-        total += (hf * 60 + mf) - (hi * 60 + mi)
+        let diff = (hf * 60 + mf) - (hi * 60 + mi)
+        if (diff < 0) diff += 24 * 60 // passou da meia-noite
+        total += diff
       }
     }
     if (total <= 0) return ''

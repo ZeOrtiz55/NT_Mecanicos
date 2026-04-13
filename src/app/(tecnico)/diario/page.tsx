@@ -63,7 +63,9 @@ function calcTotalHoras(viagens: Viagem[]) {
   let total = 0
   for (const v of viagens) {
     if (v.horaSaida && v.horaSaidaCliente) {
-      total += diffMinutos(v.horaSaida, v.horaSaidaCliente)
+      let diff = diffMinutos(v.horaSaida, v.horaSaidaCliente)
+      if (diff < 0) diff += 24 * 60
+      total += diff
     }
   }
   if (total <= 0) return ''
