@@ -104,6 +104,23 @@ function formatarDataCompleta(d: string) {
   return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 }
 
+/* ═══ Helpers de fase ═══ */
+const FASES_EXECUCAO = ['Execução', 'Execução Procurando peças', 'Execução aguardando peças (em transporte)']
+const FASES_AGUARDANDO = ['Aguardando outros', 'Aguardando ordem Técnico', 'Executada aguardando cliente', 'Executada aguardando comercial']
+
+function getFaseInfo(status: string): { label: string; color: string; bg: string } {
+  if (FASES_EXECUCAO.includes(status)) {
+    if (status.includes('peças')) return { label: 'Aguardando peças', color: colors.warning, bg: colors.warningBg }
+    return { label: 'Em execução', color: colors.info, bg: colors.infoBg }
+  }
+  if (status === 'Aguardando ordem Técnico') return { label: 'Aguard. ordem técnico', color: '#7C3AED', bg: '#F5F3FF' }
+  if (status === 'Executada aguardando cliente') return { label: 'Aguard. cliente', color: colors.warning, bg: colors.warningBg }
+  if (status === 'Executada aguardando comercial') return { label: 'Aguard. comercial', color: colors.warning, bg: colors.warningBg }
+  if (status === 'Aguardando outros') return { label: 'Aguardando', color: colors.textMuted, bg: colors.border }
+  if (status.includes('Orçamento')) return { label: 'Orçamento', color: colors.accent, bg: colors.accentBg }
+  return { label: status, color: colors.textMuted, bg: colors.border }
+}
+
 /* ═══ Card de OS compacto (Preencher) ═══ */
 function OsCard({
   os,
@@ -114,6 +131,8 @@ function OsCard({
   cidade?: string
   preenchida: boolean
 }) {
+  const fase = getFaseInfo(os.Status)
+
   return (
     <ListRow
       href={`/os/${os.Id_Ordem}`}
@@ -121,13 +140,14 @@ function OsCard({
       iconColor={preenchida ? colors.success : colors.warning}
       iconBg={preenchida ? colors.successBg : colors.warningBg}
       badge={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: colors.primary }}>
             {os.Id_Ordem}
           </span>
           <Badge status={preenchida ? 'preenchida' : 'pendente'}>
             {preenchida ? 'Preenchida' : 'Pendente'}
           </Badge>
+          <Badge bg={fase.bg} color={fase.color}>{fase.label}</Badge>
         </div>
       }
       title={os.Os_Cliente}
@@ -329,36 +349,38 @@ export default function OrdensHub() {
 
   const hoje = getHoje()
 
-  // Separar: atrasadas, hoje, futuras (exclui enviadas)
-  const { atrasadas, deHoje, futuras, pendentesCount } = useMemo(() => {
+  // Separar: atrasadas, hoje, futuras, outras fases (exclui enviadas)
+  const { atrasadas, deHoje, futuras, outrasFases, pendentesCount } = useMemo(() => {
     const ords = ordensRaw.filter(o => !enviadas.has(o.Id_Ordem))
 
     const atr: OrdemServico[] = []
     const hoj: OrdemServico[] = []
     const fut: OrdemServico[] = []
+    const outras: OrdemServico[] = []
 
     ords.forEach(o => {
       const prev = o.Previsao_Execucao?.trim?.() || ''
       const datas = agendaMap[o.Id_Ordem] || []
       const datasOrdenadas = [...datas].sort()
-
-      // Tem data na agenda? usa a agenda. Senão, usa Previsao_Execucao
       const proximaData = datasOrdenadas.find(d => d >= hoje) || prev
 
-      if (prev && prev < hoje && !datasOrdenadas.some(d => d >= hoje)) {
-        // Atrasada: previsão no passado e sem agenda futura
+      // OS em fases não-execução (aguardando peças, cliente, orçamento, etc.)
+      const emExecucao = FASES_EXECUCAO.includes(o.Status)
+      const aguardando = FASES_AGUARDANDO.includes(o.Status) || o.Status.includes('Orçamento')
+
+      if (aguardando) {
+        outras.push(o)
+      } else if (prev && prev < hoje && !datasOrdenadas.some(d => d >= hoje)) {
         atr.push(o)
       } else if (proximaData === hoje) {
-        // Hoje: só se tem data de execução exatamente hoje
         hoj.push(o)
       } else {
-        // Futuras: data futura OU sem data preenchida
         fut.push(o)
       }
     })
 
     const pend = ords.filter(o => !preenchidas.has(o.Id_Ordem)).length
-    return { atrasadas: atr, deHoje: hoj, futuras: fut, pendentesCount: pend }
+    return { atrasadas: atr, deHoje: hoj, futuras: fut, outrasFases: outras, pendentesCount: pend }
   }, [ordensRaw, enviadas, preenchidas, agendaMap, hoje])
 
   // Busca com debounce
@@ -486,6 +508,15 @@ export default function OrdensHub() {
               {futuras.length > 0 && !busca.trim() && (
                 <Section label="Próximos dias" icon={Calendar} color={colors.info} count={futuras.length}>
                   {futuras.map(os => (
+                    <OsCard key={os.Id_Ordem} os={os} cidade={cidadeMap[os.Cnpj_Cliente]} preenchida={preenchidas.has(os.Id_Ordem)} />
+                  ))}
+                </Section>
+              )}
+
+              {/* Outras fases (aguardando peças, cliente, orçamento, etc.) */}
+              {outrasFases.length > 0 && !busca.trim() && (
+                <Section label="Outras fases" icon={Info} color={colors.textMuted} count={outrasFases.length}>
+                  {outrasFases.map(os => (
                     <OsCard key={os.Id_Ordem} os={os} cidade={cidadeMap[os.Cnpj_Cliente]} preenchida={preenchidas.has(os.Id_Ordem)} />
                   ))}
                 </Section>
