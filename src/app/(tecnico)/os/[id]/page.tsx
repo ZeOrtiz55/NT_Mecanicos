@@ -14,8 +14,7 @@ interface DiaVisita {
   data: string
   horaChegada: string
   horaSaida: string
-  kmInicio: string
-  kmFim: string
+  kmTotal: string
 }
 
 const cardStyle: React.CSSProperties = {
@@ -58,7 +57,7 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
   const [cidade, setCidade] = useState('')
 
   // Registro de visita (horários)
-  const [dias, setDias] = useState<DiaVisita[]>([{ data: hoje(), horaChegada: '', horaSaida: '', kmInicio: '', kmFim: '' }])
+  const [dias, setDias] = useState<DiaVisita[]>([{ data: hoje(), horaChegada: '', horaSaida: '', kmTotal: '' }])
   const [horariosRegistrados, setHorariosRegistrados] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [justificativa, setJustificativa] = useState('')
@@ -91,19 +90,19 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
         if (preench.DataInicio) {
           diasLoaded.push({
             data: preench.DataInicio, horaChegada: preench.InicioHora || '',
-            horaSaida: preench.FinalHora || '', kmInicio: preench.InicioKm || '', kmFim: preench.FinalKm || '',
+            horaSaida: preench.FinalHora || '', kmTotal: preench.TotalKm || '',
           })
         }
         if (preench.AdicionarData2 && preench.DataInicio2) {
           diasLoaded.push({
             data: preench.DataInicio2, horaChegada: preench.InicioHora2 || '',
-            horaSaida: preench.FinalHora2 || '', kmInicio: preench.InicioKm2 || '', kmFim: preench.FinalKm2 || '',
+            horaSaida: preench.FinalHora2 || '', kmTotal: '',
           })
         }
         if (preench.AdicionarData3 && preench.DataInicio3) {
           diasLoaded.push({
             data: preench.DataInicio3, horaChegada: preench.InicioHora3 || '',
-            horaSaida: preench.FinalHora3 || '', kmInicio: preench.InicioKm3 || '', kmFim: preench.FinalKm3 || '',
+            horaSaida: preench.FinalHora3 || '', kmTotal: '',
           })
         }
         if (diasLoaded.length > 0) {
@@ -157,8 +156,9 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
   const calcTotalKm = () => {
     let total = 0
     for (const d of dias) {
-      const ini = parseFloat(d.kmInicio) || 0
-      const fim = parseFloat(d.kmFim) || 0
+      const km = parseFloat(d.kmTotal) || 0
+      const ini = 0
+      const fim = km
       if (fim > ini) total += fim - ini
     }
     return total > 0 ? String(total) : ''
@@ -189,22 +189,22 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
       DataFinal: dias[dias.length - 1]?.data || dias[0]?.data || '',
       InicioHora: dias[0]?.horaChegada || '',
       FinalHora: dias[0]?.horaSaida || '',
-      InicioKm: dias[0]?.kmInicio || '',
-      FinalKm: dias[0]?.kmFim || '',
+      InicioKm: '',
+      FinalKm: '',
       // Dia 2
       AdicionarData2: dias.length >= 2,
       DataInicio2: dias[1]?.data || '',
       InicioHora2: dias[1]?.horaChegada || '',
       FinalHora2: dias[1]?.horaSaida || '',
-      InicioKm2: dias[1]?.kmInicio || '',
-      FinalKm2: dias[1]?.kmFim || '',
+      InicioKm2: '',
+      FinalKm2: '',
       // Dia 3
       AdicionarData3: dias.length >= 3,
       DataInicio3: dias[2]?.data || '',
       InicioHora3: dias[2]?.horaChegada || '',
       FinaHora3: dias[2]?.horaSaida || '',
-      InicioKm3: dias[2]?.kmInicio || '',
-      FinalKm3: dias[2]?.kmFim || '',
+      InicioKm3: '',
+      FinalKm3: '',
       TotalHora: calcTotalHoras(),
       TotalKm: calcTotalKm(),
       Data: hoje(),
@@ -441,19 +441,11 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
                       style={inputStyle} />
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  <div>
-                    <label style={{ fontSize: 11, color: '#6B7280' }}>KM início</label>
-                    <input type="text" inputMode="numeric" value={dia.kmInicio}
-                      onChange={(e) => updateDia(i, 'kmInicio', e.target.value)}
-                      style={inputStyle} placeholder="0" />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: '#6B7280' }}>KM fim</label>
-                    <input type="text" inputMode="numeric" value={dia.kmFim}
-                      onChange={(e) => updateDia(i, 'kmFim', e.target.value)}
-                      style={inputStyle} placeholder="0" />
-                  </div>
+                <div>
+                  <label style={{ fontSize: 11, color: '#6B7280' }}>Total KM</label>
+                  <input type="text" inputMode="numeric" value={dia.kmTotal}
+                    onChange={(e) => updateDia(i, 'kmTotal', e.target.value)}
+                    style={inputStyle} placeholder="0" />
                 </div>
               </div>
             </div>
@@ -462,7 +454,7 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
           {/* Botão adicionar dia */}
           {dias.length < 3 && (
             <button type="button" onClick={() => {
-              setDias(prev => [...prev, { data: hoje(), horaChegada: '', horaSaida: '', kmInicio: '', kmFim: '' }])
+              setDias(prev => [...prev, { data: hoje(), horaChegada: '', horaSaida: '', kmTotal: '' }])
               setHorariosRegistrados(false)
             }} style={{
               padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,

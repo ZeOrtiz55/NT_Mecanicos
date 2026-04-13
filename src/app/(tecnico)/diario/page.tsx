@@ -16,8 +16,7 @@ interface Viagem {
   horaSaida: string
   horaChegada: string
   horaSaidaCliente: string
-  kmInicio: string
-  kmFim: string
+  kmTotal: string
 }
 
 interface DiarioEntry {
@@ -76,9 +75,7 @@ function calcTotalHoras(viagens: Viagem[]) {
 function calcTotalKm(viagens: Viagem[]) {
   let total = 0
   for (const v of viagens) {
-    const ini = parseFloat(v.kmInicio) || 0
-    const fim = parseFloat(v.kmFim) || 0
-    if (fim > ini) total += fim - ini
+    total += parseFloat(v.kmTotal) || 0
   }
   return total > 0 ? String(total) : ''
 }
@@ -152,7 +149,7 @@ export default function DiarioTecnico() {
     // Inicializar viagens padrão para OS sem diário
     for (const os of lista) {
       if (!viagensMap[os.Id_Ordem]) {
-        viagensMap[os.Id_Ordem] = [{ data: dataHoje, horaSaida: '', horaChegada: '', horaSaidaCliente: '', kmInicio: '', kmFim: '' }]
+        viagensMap[os.Id_Ordem] = [{ data: dataHoje, horaSaida: '', horaChegada: '', horaSaidaCliente: '', kmTotal: '' }]
       }
     }
 
@@ -298,7 +295,7 @@ export default function DiarioTecnico() {
   const adicionarViagem = (osId: string) => {
     setViagensLocal(prev => {
       const arr = [...(prev[osId] || [])]
-      arr.push({ data: hoje(), horaSaida: '', horaChegada: '', horaSaidaCliente: '', kmInicio: '', kmFim: '' })
+      arr.push({ data: hoje(), horaSaida: '', horaChegada: '', horaSaidaCliente: '', kmTotal: '' })
       return { ...prev, [osId]: arr }
     })
   }
@@ -346,20 +343,20 @@ export default function DiarioTecnico() {
       DataFinal: viagens[viagens.length - 1]?.data || viagens[0]?.data || '',
       InicioHora: viagens[0]?.horaSaida || '',
       FinalHora: viagens[0]?.horaSaidaCliente || '',
-      InicioKm: viagens[0]?.kmInicio || '',
-      FinalKm: viagens[0]?.kmFim || '',
+      InicioKm: '',
+      FinalKm: '',
       AdicionarData2: viagens.length >= 2,
       DataInicio2: viagens[1]?.data || '',
       InicioHora2: viagens[1]?.horaSaida || '',
       FinalHora2: viagens[1]?.horaSaidaCliente || '',
-      InicioKm2: viagens[1]?.kmInicio || '',
-      FinalKm2: viagens[1]?.kmFim || '',
+      InicioKm2: '',
+      FinalKm2: '',
       AdicionarData3: viagens.length >= 3,
       DataInicio3: viagens[2]?.data || '',
       InicioHora3: viagens[2]?.horaSaida || '',
       FinaHora3: viagens[2]?.horaSaidaCliente || '',
-      InicioKm3: viagens[2]?.kmInicio || '',
-      FinalKm3: viagens[2]?.kmFim || '',
+      InicioKm3: '',
+      FinalKm3: '',
       TotalHora: totalHoras,
       TotalKm: totalKm,
       Data: hoje(),
@@ -700,21 +697,12 @@ export default function DiarioTecnico() {
                                     style={inputStyle} />
                                 </div>
                               </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                                <div>
-                                  <label style={{ fontSize: 11, color: '#6B7280' }}>KM início</label>
-                                  <input type="text" inputMode="numeric" value={v.kmInicio}
-                                    disabled={status === 'finalizado'}
-                                    onChange={(e) => updateViagem(os.Id_Ordem, i, 'kmInicio', e.target.value)}
-                                    style={inputStyle} placeholder="0" />
-                                </div>
-                                <div>
-                                  <label style={{ fontSize: 11, color: '#6B7280' }}>KM fim</label>
-                                  <input type="text" inputMode="numeric" value={v.kmFim}
-                                    disabled={status === 'finalizado'}
-                                    onChange={(e) => updateViagem(os.Id_Ordem, i, 'kmFim', e.target.value)}
-                                    style={inputStyle} placeholder="0" />
-                                </div>
+                              <div>
+                                <label style={{ fontSize: 11, color: '#6B7280' }}>Total KM</label>
+                                <input type="text" inputMode="numeric" value={v.kmTotal}
+                                  disabled={status === 'finalizado'}
+                                  onChange={(e) => updateViagem(os.Id_Ordem, i, 'kmTotal', e.target.value)}
+                                  style={inputStyle} placeholder="0" />
                               </div>
                               {v.horaSaidaCliente && (
                                 <div>

@@ -17,8 +17,7 @@ interface DiaForm {
   data: string
   horaInicio: string
   horaFim: string
-  kmInicio: string
-  kmFim: string
+  kmTotal: string
 }
 
 interface PecaInfo {
@@ -69,7 +68,7 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
   const [nomResp, setNomResp] = useState('')
 
   // Dias (dinâmico)
-  const [dias, setDias] = useState<DiaForm[]>([{ data: '', horaInicio: '', horaFim: '', kmInicio: '', kmFim: '' }])
+  const [dias, setDias] = useState<DiaForm[]>([{ data: '', horaInicio: '', horaFim: '', kmTotal: '' }])
 
   // Peças informadas pelo técnico
   const [pecas, setPecas] = useState<PecaInfo[]>([])
@@ -176,19 +175,19 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
         if (existing.DataInicio) {
           diasLoaded.push({
             data: existing.DataInicio, horaInicio: existing.InicioHora || '',
-            horaFim: existing.FinalHora || '', kmInicio: existing.InicioKm || '', kmFim: existing.FinalKm || '',
+            horaFim: existing.FinalHora || '', kmTotal: existing.TotalKm || '',
           })
         }
         if (existing.AdicionarData2 && existing.DataInicio2) {
           diasLoaded.push({
             data: existing.DataInicio2, horaInicio: existing.InicioHora2 || '',
-            horaFim: existing.FinalHora2 || '', kmInicio: existing.InicioKm2 || '', kmFim: existing.FinalKm2 || '',
+            horaFim: existing.FinalHora2 || '', kmTotal: '',
           })
         }
         if (existing.AdicionarData3 && existing.DataInicio3) {
           diasLoaded.push({
             data: existing.DataInicio3, horaInicio: existing.InicioHora3 || '',
-            horaFim: existing.FinaHora3 || '', kmInicio: existing.InicioKm3 || '', kmFim: existing.FinalKm3 || '',
+            horaFim: existing.FinaHora3 || '', kmTotal: '',
           })
         }
         if (diasLoaded.length > 0) setDias(diasLoaded)
@@ -256,9 +255,7 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
   const calcTotalKm = () => {
     let total = 0
     for (const d of dias) {
-      const ini = parseFloat(d.kmInicio) || 0
-      const fim = parseFloat(d.kmFim) || 0
-      if (fim > ini) total += fim - ini
+      total += parseFloat(d.kmTotal) || 0
     }
     return total > 0 ? String(total) : ''
   }
@@ -310,20 +307,20 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
       DataFinal: dias[dias.length - 1]?.data || dias[0]?.data || '',
       InicioHora: dias[0]?.horaInicio || '',
       FinalHora: dias[0]?.horaFim || '',
-      InicioKm: dias[0]?.kmInicio || '',
-      FinalKm: dias[0]?.kmFim || '',
+      InicioKm: '',
+      FinalKm: '',
       AdicionarData2: dias.length >= 2,
       DataInicio2: dias[1]?.data || '',
       InicioHora2: dias[1]?.horaInicio || '',
       FinalHora2: dias[1]?.horaFim || '',
-      InicioKm2: dias[1]?.kmInicio || '',
-      FinalKm2: dias[1]?.kmFim || '',
+      InicioKm2: '',
+      FinalKm2: '',
       AdicionarData3: dias.length >= 3,
       DataInicio3: dias[2]?.data || '',
       InicioHora3: dias[2]?.horaInicio || '',
       FinaHora3: dias[2]?.horaFim || '',
-      InicioKm3: dias[2]?.kmInicio || '',
-      FinalKm3: dias[2]?.kmFim || '',
+      InicioKm3: '',
+      FinalKm3: '',
       FotoHorimetro: fotoHorimetro, FotoChassis: fotoChassis,
       FotoFrente: fotoFrente, FotoDireita: fotoDireita,
       FotoEsquerda: fotoEsquerda, FotoTraseira: fotoTraseira, FotoVolante: fotoVolante,
@@ -872,15 +869,9 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
                   <input type="time" value={dia.horaFim} onChange={(e) => updateDia(i, 'horaFim', e.target.value)} style={inputStyle} />
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>KM Início</label>
-                  <input type="text" inputMode="numeric" value={dia.kmInicio} onChange={(e) => updateDia(i, 'kmInicio', e.target.value)} style={inputStyle} placeholder="0" />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>KM Final</label>
-                  <input type="text" inputMode="numeric" value={dia.kmFim} onChange={(e) => updateDia(i, 'kmFim', e.target.value)} style={inputStyle} placeholder="0" />
-                </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Total KM</label>
+                <input type="text" inputMode="numeric" value={dia.kmTotal} onChange={(e) => updateDia(i, 'kmTotal', e.target.value)} style={inputStyle} placeholder="0" />
               </div>
             </div>
             {i < dias.length - 1 && <div style={{ height: 1, background: '#E5E7EB', margin: '16px 0' }} />}
@@ -888,7 +879,7 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
         ))}
 
         {dias.length < 3 && (
-          <button type="button" onClick={() => setDias(prev => [...prev, { data: '', horaInicio: '', horaFim: '', kmInicio: '', kmFim: '' }])} style={{
+          <button type="button" onClick={() => setDias(prev => [...prev, { data: '', horaInicio: '', horaFim: '', kmTotal: '' }])} style={{
             marginTop: 14, padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
             border: '2px solid #E5E7EB', background: '#fff', color: '#6B7280', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6,
