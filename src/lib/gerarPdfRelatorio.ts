@@ -209,7 +209,7 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
 
   drawRow([
     { label: 'Tipo de Serviço', value: dados.tipoServico },
-    { label: 'Projeto', value: dados.projeto },
+    { label: 'Projeto / Chassis', value: dados.chassis || dados.projeto || '-' },
     { label: 'PPV', value: dados.idPPV || '-' },
   ])
 
@@ -235,10 +235,6 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
     { label: 'Chassis', value: dados.chassis },
     { label: 'Horímetro', value: dados.horimetro },
     { label: 'Garantia', value: dados.garantia ? 'SIM' : 'NÃO' },
-  ])
-
-  drawRow([
-    { label: 'Local (Modelo/Série)', value: [dados.tratorLocal1, dados.tratorLocal2].filter(Boolean).join(' / ') || '-' },
   ])
 
   // --- Diagnóstico e Serviço ---

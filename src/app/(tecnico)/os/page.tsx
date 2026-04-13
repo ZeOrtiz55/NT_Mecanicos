@@ -346,13 +346,14 @@ export default function OrdensHub() {
       const proximaData = datasOrdenadas.find(d => d >= hoje) || prev
 
       if (prev && prev < hoje && !datasOrdenadas.some(d => d >= hoje)) {
+        // Atrasada: previsão no passado e sem agenda futura
         atr.push(o)
-      } else if (proximaData === hoje || (!proximaData && !prev)) {
+      } else if (proximaData === hoje) {
+        // Hoje: só se tem data de execução exatamente hoje
         hoj.push(o)
-      } else if (proximaData && proximaData > hoje) {
-        fut.push(o)
       } else {
-        hoj.push(o) // fallback
+        // Futuras: data futura OU sem data preenchida
+        fut.push(o)
       }
     })
 
