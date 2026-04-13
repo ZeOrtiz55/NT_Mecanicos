@@ -3,6 +3,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useNotificacoes } from '@/hooks/useNotificacoes'
 import HeaderMobile from '@/components/HeaderMobile'
 import BottomNavTecnico from '@/components/BottomNavTecnico'
+import OfflineSync from '@/components/OfflineSync'
 
 export default function TecnicoLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
@@ -20,6 +21,7 @@ export default function TecnicoLayout({ children }: { children: React.ReactNode 
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: 100 }}>
+      <OfflineSync />
       <HeaderMobile
         notificacoes={notificacoes}
         naoLidas={naoLidas}

@@ -9,6 +9,7 @@ import SignaturePad from '@/components/SignaturePad'
 import { ArrowLeft, Plus, Minus, CheckCircle, Send, Truck, Camera, ChevronDown, ChevronUp, Package, AlertTriangle, FileDown } from 'lucide-react'
 import Link from 'next/link'
 import { gerarPdfRelatorio } from '@/lib/gerarPdfRelatorio'
+import { notificarPortalOS } from '@/lib/notificarPortal'
 
 const TIPOS_SERVICO = ['Manutenção', 'Revisão', 'Montagem Implemento', 'Garantia', 'Entrega Técnica', 'Inspeção Pré Entrega']
 const HORAS_REVISAO = ['50', '300', '600', '900', '1200', '1500', '1800', '2100', '2400', '2700', '3000']
@@ -417,6 +418,9 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
                 .in('id_pedido', ppvIds).not('status', 'in', '("Fechado","Cancelado")')
             }
           }
+
+          // Notificar portal
+          notificarPortalOS(id, user?.tecnico_nome || '', os?.Os_Cliente || '')
         }
       }
     } catch (err) {

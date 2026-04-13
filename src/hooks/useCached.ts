@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { cacheGet, cacheSet, cacheIsFresh } from '@/lib/cache'
+import { cacheGet, cacheSet, cacheIsFresh, cacheGetPersisted } from '@/lib/cache'
 
 interface UseCachedOptions {
   skip?: boolean
@@ -40,12 +40,17 @@ export function useCached<T>(
       setData(result)
     } catch (e) {
       console.error(`[cache] Erro ao buscar ${keyRef.current}:`, e)
+      // Se falhou (offline), tenta IndexedDB
+      if (!background) {
+        const persisted = await cacheGetPersisted<T>(keyRef.current)
+        if (persisted) setData(persisted)
+      }
     } finally {
       setLoading(false)
       setRefreshing(false)
       fetchingRef.current = false
     }
-  }, []) // sem dependências - usa refs
+  }, [])
 
   useEffect(() => {
     if (options?.skip) {
@@ -56,19 +61,25 @@ export function useCached<T>(
     const cached = cacheGet<T>(key)
 
     if (cached) {
-      // Tem cache: mostra instantâneo
       setData(cached)
       setLoading(false)
-
-      // Se stale, atualiza em background
       if (!cacheIsFresh(key)) {
         doFetch(true)
       }
     } else {
-      // Sem cache: fetch completo
-      doFetch(false)
+      // Tenta IndexedDB antes de ir na rede
+      cacheGetPersisted<T>(key).then((persisted) => {
+        if (persisted) {
+          setData(persisted)
+          setLoading(false)
+          // Dados do IndexedDB são stale, revalida em background
+          doFetch(true)
+        } else {
+          doFetch(false)
+        }
+      })
     }
-  }, [key, options?.skip]) // doFetch é estável (sem deps)
+  }, [key, options?.skip])
 
   const refresh = useCallback(() => {
     const cached = cacheGet<T>(keyRef.current)

@@ -1,10 +1,27 @@
-const CACHE_NAME = 'nt-mecanicos-v2';
+const CACHE_NAME = 'nt-mecanicos-v3';
 const OFFLINE_URL = '/';
 
 const PRECACHE_URLS = [
   '/',
+  '/os',
+  '/requisicoes',
+  '/diario',
+  '/agenda',
   '/manifest.json',
   '/capa_app.png',
+  '/Logo_Nova.png',
+];
+
+// Assets que devem ser cacheados agressivamente (cache-first)
+const CACHE_FIRST_PATTERNS = [
+  /\/_next\/static\//,
+  /\.(?:png|jpg|jpeg|svg|gif|ico|webp|woff2?)$/,
+  /\/manifest\.json$/,
+];
+
+// URLs do Supabase que devem usar network-first com fallback
+const API_PATTERNS = [
+  /supabase\.co/,
 ];
 
 self.addEventListener('install', (event) => {
@@ -26,15 +43,36 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  const url = event.request.url;
+
+  // Cache-first para assets estáticos (muito mais rápido)
+  if (CACHE_FIRST_PATTERNS.some((p) => p.test(url))) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Network-first para tudo o resto (páginas, API)
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, clone);
-        });
+        // Não cachear respostas de API do Supabase (dados dinâmicos ficam no IndexedDB)
+        if (!API_PATTERNS.some((p) => p.test(url))) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL)))
+      .catch(() =>
+        caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL))
+      )
   );
 });

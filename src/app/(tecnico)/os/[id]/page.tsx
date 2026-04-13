@@ -156,10 +156,7 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
   const calcTotalKm = () => {
     let total = 0
     for (const d of dias) {
-      const km = parseFloat(d.kmTotal) || 0
-      const ini = 0
-      const fim = km
-      if (fim > ini) total += fim - ini
+      total += parseFloat(d.kmTotal) || 0
     }
     return total > 0 ? String(total) : ''
   }
