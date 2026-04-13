@@ -40,7 +40,7 @@ interface DadosRelatorio {
   tipoRev: string
 
   // Dias
-  dias: { data: string; horaInicio: string; horaFim: string; kmInicio: string; kmFim: string }[]
+  dias: { data: string; horaInicio: string; horaFim: string; kmTotal: string }[]
   totalHora: string
   totalKm: string
 
@@ -277,8 +277,8 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
   doc.rect(marginL, y, contentW, 6, 'F')
   doc.setFontSize(8)
   doc.setTextColor(AZUL_ESCURO)
-  const cols = [0, 35, 65, 95, 125, 150]
-  const headers = ['Data', 'Hora Início', 'Hora Fim', 'KM Início', 'KM Fim']
+  const cols = [0, 35, 65, 95, 130]
+  const headers = ['Data', 'Hora Início', 'Hora Fim', 'Total KM']
   headers.forEach((h, i) => doc.text(h, marginL + cols[i] + 2, y + 4))
   y += 7
 
@@ -289,8 +289,7 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
     doc.text(formatarDataBR(dia.data), marginL + cols[0] + 2, y + 4)
     doc.text(dia.horaInicio || '-', marginL + cols[1] + 2, y + 4)
     doc.text(dia.horaFim || '-', marginL + cols[2] + 2, y + 4)
-    doc.text(dia.kmInicio || '-', marginL + cols[3] + 2, y + 4)
-    doc.text(dia.kmFim || '-', marginL + cols[4] + 2, y + 4)
+    doc.text(dia.kmTotal || '-', marginL + cols[3] + 2, y + 4)
     doc.setDrawColor('#E5E7EB')
     doc.setLineWidth(0.2)
     doc.line(marginL, y + 6, pageW - marginR, y + 6)

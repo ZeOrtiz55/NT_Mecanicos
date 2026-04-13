@@ -105,8 +105,7 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
         data: (registro.DataInicio as string) || '',
         horaInicio: (registro.InicioHora as string) || '',
         horaFim: (registro.FinalHora as string) || '',
-        kmInicio: (registro.InicioKm as string) || '',
-        kmFim: (registro.FinalKm as string) || '',
+        kmTotal: (registro.TotalKm as string) || '',
       })
     }
     if (registro.AdicionarData2 && registro.DataInicio2) {
@@ -114,8 +113,7 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
         data: (registro.DataInicio2 as string) || '',
         horaInicio: (registro.InicioHora2 as string) || '',
         horaFim: (registro.FinalHora2 as string) || '',
-        kmInicio: (registro.InicioKm2 as string) || '',
-        kmFim: (registro.FinalKm2 as string) || '',
+        kmTotal: '',
       })
     }
     if (registro.AdicionarData3 && registro.DataInicio3) {
@@ -123,12 +121,11 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
         data: (registro.DataInicio3 as string) || '',
         horaInicio: (registro.InicioHora3 as string) || '',
         horaFim: (registro.FinaHora3 as string) || '',
-        kmInicio: (registro.InicioKm3 as string) || '',
-        kmFim: (registro.FinalKm3 as string) || '',
+        kmTotal: '',
       })
     }
     if (dias.length === 0) {
-      dias.push({ data: '', horaInicio: '', horaFim: '', kmInicio: '', kmFim: '' })
+      dias.push({ data: '', horaInicio: '', horaFim: '', kmTotal: '' })
     }
 
     try {

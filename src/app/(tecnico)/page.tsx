@@ -85,8 +85,8 @@ async function fetchHomeData(nome: string, tecnicoNome: string): Promise<HomeDat
     osHoje,
     osAtrasadas,
     reqPendentes: reqRes.count || 0,
-    agendaHoje: (agendaRes.data || []) as AgendaItem[],
-    caminhosHoje: (caminhosRes.data || []) as CaminhoAvulso[],
+    agendaHoje: (agendaRes.data || []) as unknown as AgendaItem[],
+    caminhosHoje: (caminhosRes.data || []) as unknown as CaminhoAvulso[],
     cidadeMap,
   }
 }
