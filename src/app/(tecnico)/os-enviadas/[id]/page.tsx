@@ -142,6 +142,8 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
         temTec2: (registro.TemTec as boolean) || false,
         tecResp2: (registro.TecResp2 as string) || '',
         chassis: (registro.Chassis as string) || '',
+        marca: (registro.Marca as string) || '',
+        modelo: (registro.Modelo as string) || '',
         horimetro: (registro.Horimetro as string) || '',
         garantia: (registro.Garantia as boolean) || false,
         numPlaca: (registro.NumPlaca as string) || '',

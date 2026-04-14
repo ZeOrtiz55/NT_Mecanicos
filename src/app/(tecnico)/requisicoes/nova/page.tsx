@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useFormBackup } from '@/hooks/useFormBackup'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, Send, CheckCircle, Wrench, Utensils, Package, Truck, Car, Fuel, Tractor, Bike, Search, Building2 } from 'lucide-react'
@@ -69,6 +70,21 @@ export default function NovaSolicitacao() {
     kilometragem: '',
     horimetro: '',
   })
+
+  // Backup automático do formulário
+  const getFormData = useCallback(() => ({
+    ...form, buscaIdManual, chassisPOS, modeloPOS,
+  }), [form, buscaIdManual, chassisPOS, modeloPOS])
+
+  const setFormData = useCallback((data: Record<string, unknown>) => {
+    const { buscaIdManual: bid, chassisPOS: cp, modeloPOS: mp, ...rest } = data
+    if (bid) setBuscaIdManual(bid as string)
+    if (cp) setChassisPOS(cp as string)
+    if (mp) setModeloPOS(mp as string)
+    setForm(prev => ({ ...prev, ...rest as Partial<typeof prev> }))
+  }, [])
+
+  const { clear: clearBackup } = useFormBackup('req-nova', getFormData, setFormData)
 
   useEffect(() => {
     if (!user) return
@@ -245,6 +261,7 @@ export default function NovaSolicitacao() {
     })
 
     setSucesso(true)
+    clearBackup()
   }
 
   if (sucesso) {

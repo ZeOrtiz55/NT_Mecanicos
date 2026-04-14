@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, fetchAll } from '@/lib/supabase'
 import type { OrdemServico } from '@/lib/types'
-import { Search, Wrench, MapPin, User } from 'lucide-react'
+import { Search, Wrench, MapPin, User, Package, FileText } from 'lucide-react'
 import Link from 'next/link'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -15,6 +15,19 @@ const STATUS_COLORS: Record<string, string> = {
   'Cancelada': '#EF4444',
 }
 
+interface ReqResumo {
+  id: number
+  titulo: string
+  valor_despeza: string | null
+  ordem_servico: string | null
+}
+
+interface RelatorioResumo {
+  Ordem_Servico: string
+  Status: string
+  pdf_criado: boolean
+}
+
 export default function OSListPage() {
   const [ordens, setOrdens] = useState<OrdemServico[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,13 +35,46 @@ export default function OSListPage() {
   const [tecnicoFiltro, setTecnicoFiltro] = useState<string>('todos')
   const [tecnicos, setTecnicos] = useState<string[]>([])
   const [mostrarConcluidas, setMostrarConcluidas] = useState(false)
+  const [reqMap, setReqMap] = useState<Record<string, ReqResumo[]>>({})
+  const [relMap, setRelMap] = useState<Record<string, RelatorioResumo>>({})
 
   useEffect(() => {
     const carregar = async () => {
-      const list = await fetchAll<OrdemServico>('Ordem_Servico', {
-        order: { column: 'Id_Ordem', ascending: false },
-      })
+      const [list, reqData, relData] = await Promise.all([
+        fetchAll<OrdemServico>('Ordem_Servico', {
+          order: { column: 'Id_Ordem', ascending: false },
+        }),
+        supabase
+          .from('Requisicao')
+          .select('id, titulo, valor_despeza, ordem_servico')
+          .not('ordem_servico', 'is', null),
+        supabase
+          .from('Ordem_Servico_Tecnicos')
+          .select('Ordem_Servico, Status, pdf_criado'),
+      ])
+
       setOrdens(list)
+
+      // Mapear requisições por OS
+      const rmap: Record<string, ReqResumo[]> = {}
+      if (reqData.data) {
+        for (const r of reqData.data as ReqResumo[]) {
+          if (r.ordem_servico) {
+            if (!rmap[r.ordem_servico]) rmap[r.ordem_servico] = []
+            rmap[r.ordem_servico].push(r)
+          }
+        }
+      }
+      setReqMap(rmap)
+
+      // Mapear relatórios por OS
+      const rlmap: Record<string, RelatorioResumo> = {}
+      if (relData.data) {
+        for (const r of relData.data as RelatorioResumo[]) {
+          rlmap[r.Ordem_Servico] = r
+        }
+      }
+      setRelMap(rlmap)
 
       const nomes = [...new Set(list.flatMap((o) => [o.Os_Tecnico, o.Os_Tecnico2].filter(Boolean)))].sort()
       setTecnicos(nomes)
@@ -50,6 +96,49 @@ export default function OSListPage() {
 
   return (
     <div>
+      <style>{`
+        @keyframes pulse-badge {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        .badge-pulse {
+          animation: pulse-badge 1.5s ease-in-out infinite;
+        }
+        .tooltip-wrapper {
+          position: relative;
+          display: inline-flex;
+        }
+        .tooltip-wrapper .tooltip-content {
+          display: none;
+          position: absolute;
+          bottom: calc(100% + 8px);
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1F2937;
+          color: #fff;
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 12px;
+          line-height: 1.5;
+          white-space: nowrap;
+          z-index: 50;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+          pointer-events: none;
+        }
+        .tooltip-wrapper .tooltip-content::after {
+          content: '';
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 6px solid transparent;
+          border-top-color: #1F2937;
+        }
+        .tooltip-wrapper:hover .tooltip-content {
+          display: block;
+        }
+      `}</style>
+
       <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E3A5F', marginBottom: 16 }}>Todas as Ordens</h1>
 
       {/* Filtro por tecnico */}
@@ -100,15 +189,66 @@ export default function OSListPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map((os) => {
             const color = STATUS_COLORS[os.Status] || '#6B7280'
+            const reqs = reqMap[os.Id_Ordem] || []
+            const rel = relMap[os.Id_Ordem]
+            const temReq = reqs.length > 0
+            const temRelatorio = rel && (rel.Status === 'enviado' || rel.pdf_criado)
+
             return (
               <Link key={os.Id_Ordem} href={`/admin/os/${os.Id_Ordem}`} style={{
                 background: '#fff', borderRadius: 14, padding: 16,
                 boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                 borderLeft: `4px solid ${color}`,
                 textDecoration: 'none', color: 'inherit',
+                position: 'relative',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: '#1E3A5F' }}>{os.Id_Ordem}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#1E3A5F' }}>{os.Id_Ordem}</span>
+
+                    {/* Badge de requisição - piscando */}
+                    {temReq && (
+                      <span className="tooltip-wrapper">
+                        <span className="badge-pulse" style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                          background: '#FEF3C7', border: '1.5px solid #F59E0B',
+                          borderRadius: 6, padding: '2px 7px',
+                          fontSize: 10, fontWeight: 700, color: '#D97706',
+                          cursor: 'default',
+                        }}>
+                          <Package size={11} />
+                          {reqs.length}
+                        </span>
+                        <span className="tooltip-content" style={{ whiteSpace: 'pre-line' }}>
+                          {reqs.map(r => {
+                            const valor = r.valor_despeza ? ` — R$ ${r.valor_despeza}` : ''
+                            return `Requisição #${r.id}: ${r.titulo}${valor}`
+                          }).join('\n')}
+                        </span>
+                      </span>
+                    )}
+
+                    {/* Badge de relatório - piscando */}
+                    {temRelatorio && (
+                      <span className="tooltip-wrapper">
+                        <span className="badge-pulse" style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                          background: '#D1FAE5', border: '1.5px solid #10B981',
+                          borderRadius: 6, padding: '2px 7px',
+                          fontSize: 10, fontWeight: 700, color: '#059669',
+                          cursor: 'default',
+                          animationDelay: '0.5s',
+                        }}>
+                          <FileText size={11} />
+                          PDF
+                        </span>
+                        <span className="tooltip-content">
+                          Relatório técnico {rel.pdf_criado ? 'com PDF gerado' : 'enviado'}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
                     background: color + '18', color,

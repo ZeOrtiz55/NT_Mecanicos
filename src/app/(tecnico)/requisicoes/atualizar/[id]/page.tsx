@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { use } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useFormBackup } from '@/hooks/useFormBackup'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, Upload, CheckCircle, Store } from 'lucide-react'
@@ -45,6 +46,21 @@ export default function AtualizarRequisicao({ params }: { params: Promise<{ id: 
     foto: null as File | null,
     fotoPreview: '',
   })
+
+  // Backup automático do formulário
+  const getFormData = useCallback(() => ({
+    valor: form.valor, fornecedor: form.fornecedor,
+  }), [form.valor, form.fornecedor])
+
+  const setFormData = useCallback((data: Record<string, unknown>) => {
+    setForm(prev => ({
+      ...prev,
+      valor: (data.valor as string) || prev.valor,
+      fornecedor: (data.fornecedor as string) || prev.fornecedor,
+    }))
+  }, [])
+
+  const { clear: clearBackup } = useFormBackup(`req-atualizar-${id}`, getFormData, setFormData)
 
   useEffect(() => {
     const carregar = async () => {
@@ -116,6 +132,7 @@ export default function AtualizarRequisicao({ params }: { params: Promise<{ id: 
 
     setSaving(false)
     setSucesso(true)
+    clearBackup()
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>

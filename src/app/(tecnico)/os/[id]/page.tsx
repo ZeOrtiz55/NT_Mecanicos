@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { use } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useFormBackup } from '@/hooks/useFormBackup'
 import type { OrdemServico } from '@/lib/types'
 import {
   ArrowLeft, ClipboardEdit, CheckCircle, MapPin, User, Wrench,
@@ -62,6 +63,18 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
   const [salvando, setSalvando] = useState(false)
   const [justificativa, setJustificativa] = useState('')
   const [precisaJustificar, setPrecisaJustificar] = useState(false)
+
+  // Backup automático dos horários
+  const getFormData = useCallback(() => ({
+    dias, justificativa,
+  }), [dias, justificativa])
+
+  const setFormData = useCallback((data: Record<string, unknown>) => {
+    if (data.dias) setDias(data.dias as DiaVisita[])
+    if (data.justificativa) setJustificativa(data.justificativa as string)
+  }, [])
+
+  const { clear: clearBackup } = useFormBackup(`os-horarios-${id}`, getFormData, setFormData)
 
   useEffect(() => {
     const carregar = async () => {
@@ -225,6 +238,7 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
 
     setHorariosRegistrados(true)
     setSalvando(false)
+    clearBackup()
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>

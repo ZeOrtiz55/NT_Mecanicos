@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useFormBackup } from '@/hooks/useFormBackup'
 import { supabase } from '@/lib/supabase'
 import { rotaDaOficina, calcularRota, geocodificar, OFICINA } from '@/lib/ors'
 import type { OrdemServico } from '@/lib/types'
@@ -96,6 +97,18 @@ export default function DiarioTecnico() {
   const [rotaInfo, setRotaInfo] = useState<Record<string, { km: number; min: number }>>({})
   const [calculandoRota, setCalculandoRota] = useState<string | null>(null)
   const [mensagemDesbloqueio, setMensagemDesbloqueio] = useState<string | null>(null)
+
+  // Backup automático das viagens preenchidas
+  const getFormData = useCallback(() => ({
+    viagensLocal, justificativa,
+  }), [viagensLocal, justificativa])
+
+  const setFormData = useCallback((data: Record<string, unknown>) => {
+    if (data.viagensLocal) setViagensLocal(data.viagensLocal as Record<string, Viagem[]>)
+    if (data.justificativa) setJustificativa(data.justificativa as string)
+  }, [])
+
+  const { clear: clearBackup } = useFormBackup('diario-campo', getFormData, setFormData)
 
   const carregar = useCallback(async () => {
     if (!user) return

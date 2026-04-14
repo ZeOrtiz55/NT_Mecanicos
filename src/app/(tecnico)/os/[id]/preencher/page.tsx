@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { use } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useFormBackup } from '@/hooks/useFormBackup'
 import { supabase } from '@/lib/supabase'
 import type { OrdemServico } from '@/lib/types'
 import FotoUpload from '@/components/FotoUpload'
@@ -64,6 +65,8 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
   const [tipoRev, setTipoRev] = useState('')
   const [projeto, setProjeto] = useState('')
   const [chassis, setChassis] = useState('')
+  const [marca, setMarca] = useState('')
+  const [modelo, setModelo] = useState('')
   const [horimetro, setHorimetro] = useState('')
   const [numPlaca, setNumPlaca] = useState('')
   const [nomResp, setNomResp] = useState('')
@@ -150,6 +153,8 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
         setTipoRev(existing.TipoRev || '')
         setProjeto(existing.Projeto || osData?.Projeto || '')
         setChassis(existing.Chassis || '')
+        setMarca(existing.Marca || '')
+        setModelo(existing.Modelo || '')
         setHorimetro(existing.Horimetro || '')
         setNumPlaca(existing.NumPlaca || '')
         setNomResp(existing.NomResp || '')
@@ -222,6 +227,65 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
     }
     carregar()
   }, [id, user])
+
+  // Backup automático do formulário
+  const getFormData = useCallback(() => ({
+    tecResp1, temTec2, tecResp2, diagnostico, servicoRealizado,
+    tipoServico, tipoRev, projeto, chassis, marca, modelo, horimetro, numPlaca, nomResp,
+    dias, pecas, ppvRevisado, justificativaPecaExtra,
+    fotoHorimetro, fotoChassis, fotoFrente, fotoDireita, fotoEsquerda,
+    fotoTraseira, fotoVolante, fotoFalha1, fotoFalha2, fotoFalha3, fotoFalha4,
+    fotoPecaNova1, fotoPecaNova2, fotoPecaInstalada1, fotoPecaInstalada2,
+    assCliente, assTecnico,
+  }), [
+    tecResp1, temTec2, tecResp2, diagnostico, servicoRealizado,
+    tipoServico, tipoRev, projeto, chassis, marca, modelo, horimetro, numPlaca, nomResp,
+    dias, pecas, ppvRevisado, justificativaPecaExtra,
+    fotoHorimetro, fotoChassis, fotoFrente, fotoDireita, fotoEsquerda,
+    fotoTraseira, fotoVolante, fotoFalha1, fotoFalha2, fotoFalha3, fotoFalha4,
+    fotoPecaNova1, fotoPecaNova2, fotoPecaInstalada1, fotoPecaInstalada2,
+    assCliente, assTecnico,
+  ])
+
+  const setFormData = useCallback((data: Record<string, unknown>) => {
+    if (data.tecResp1) setTecResp1(data.tecResp1 as string)
+    if (data.temTec2 !== undefined) setTemTec2(data.temTec2 as boolean)
+    if (data.tecResp2) setTecResp2(data.tecResp2 as string)
+    if (data.diagnostico) setDiagnostico(data.diagnostico as string)
+    if (data.servicoRealizado) setServicoRealizado(data.servicoRealizado as string)
+    if (data.tipoServico) setTipoServico(data.tipoServico as string)
+    if (data.tipoRev) setTipoRev(data.tipoRev as string)
+    if (data.projeto) setProjeto(data.projeto as string)
+    if (data.chassis) setChassis(data.chassis as string)
+    if (data.marca) setMarca(data.marca as string)
+    if (data.modelo) setModelo(data.modelo as string)
+    if (data.horimetro) setHorimetro(data.horimetro as string)
+    if (data.numPlaca) setNumPlaca(data.numPlaca as string)
+    if (data.nomResp) setNomResp(data.nomResp as string)
+    if (data.dias) setDias(data.dias as DiaForm[])
+    if (data.pecas) setPecas(data.pecas as PecaInfo[])
+    if (data.ppvRevisado !== undefined) setPpvRevisado(data.ppvRevisado as boolean)
+    if (data.justificativaPecaExtra) setJustificativaPecaExtra(data.justificativaPecaExtra as string)
+    if (data.fotoHorimetro) setFotoHorimetro(data.fotoHorimetro as string)
+    if (data.fotoChassis) setFotoChassis(data.fotoChassis as string)
+    if (data.fotoFrente) setFotoFrente(data.fotoFrente as string)
+    if (data.fotoDireita) setFotoDireita(data.fotoDireita as string)
+    if (data.fotoEsquerda) setFotoEsquerda(data.fotoEsquerda as string)
+    if (data.fotoTraseira) setFotoTraseira(data.fotoTraseira as string)
+    if (data.fotoVolante) setFotoVolante(data.fotoVolante as string)
+    if (data.fotoFalha1) setFotoFalha1(data.fotoFalha1 as string)
+    if (data.fotoFalha2) setFotoFalha2(data.fotoFalha2 as string)
+    if (data.fotoFalha3) setFotoFalha3(data.fotoFalha3 as string)
+    if (data.fotoFalha4) setFotoFalha4(data.fotoFalha4 as string)
+    if (data.fotoPecaNova1) setFotoPecaNova1(data.fotoPecaNova1 as string)
+    if (data.fotoPecaNova2) setFotoPecaNova2(data.fotoPecaNova2 as string)
+    if (data.fotoPecaInstalada1) setFotoPecaInstalada1(data.fotoPecaInstalada1 as string)
+    if (data.fotoPecaInstalada2) setFotoPecaInstalada2(data.fotoPecaInstalada2 as string)
+    if (data.assCliente) setAssCliente(data.assCliente as string)
+    if (data.assTecnico) setAssTecnico(data.assTecnico as string)
+  }, [])
+
+  const { clear: clearBackup } = useFormBackup(`os-preencher-${id}`, getFormData, setFormData)
 
   const uploadFoto = async (file: File, campo: string): Promise<string> => {
     const ext = file.name.split('.').pop() || 'jpg'
@@ -298,6 +362,8 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
       TipoRev: tipoRev,
       Projeto: projeto,
       Chassis: chassis,
+      Marca: marca,
+      Modelo: modelo,
       Garantia: tipoServico === 'Garantia',
       Horimetro: horimetro,
       NumPlaca: numPlaca,
@@ -371,6 +437,8 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
         temTec2,
         tecResp2,
         chassis,
+        marca,
+        modelo,
         horimetro,
         garantia: tipoServico === 'Garantia',
         numPlaca,
@@ -431,6 +499,7 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
 
     setSaving(false)
     setSucesso(true)
+    clearBackup()
   }
 
   const [gerandoPdf, setGerandoPdf] = useState(false)
@@ -461,6 +530,8 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
         temTec2,
         tecResp2,
         chassis,
+        marca,
+        modelo,
         horimetro,
         garantia: tipoServico === 'Garantia',
         numPlaca,
@@ -822,6 +893,18 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
               <input type="text" value={projeto} onChange={(e) => setProjeto(e.target.value)} style={inputStyle} />
             </div>
           )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={labelStyle}>Marca</label>
+              <input type="text" value={marca} onChange={(e) => setMarca(e.target.value)}
+                style={inputStyle} placeholder="Ex: Valtra" />
+            </div>
+            <div>
+              <label style={labelStyle}>Modelo</label>
+              <input type="text" value={modelo} onChange={(e) => setModelo(e.target.value)}
+                style={inputStyle} placeholder="Ex: BH 180" />
+            </div>
+          </div>
           <div>
             <label style={labelStyle}>Final do Chassis (escrito)</label>
             <input type="text" value={chassis} onChange={(e) => setChassis(e.target.value)}

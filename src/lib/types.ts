@@ -116,6 +116,8 @@ export interface OrdemServicoTecnico {
   TotalHora: string | null
   TotalKm: string | null
   Horimetro: string | null
+  Marca: string | null
+  Modelo: string | null
   Garantia: boolean
   FotoHorimetro: string | null
   FotoChassis: string | null

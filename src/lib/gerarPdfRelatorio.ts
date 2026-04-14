@@ -27,6 +27,8 @@ interface DadosRelatorio {
   tecResp2: string
 
   // Equipamento
+  marca: string
+  modelo: string
   chassis: string
   horimetro: string
   garantia: boolean
@@ -212,6 +214,14 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
     { label: 'Projeto / Chassis', value: dados.chassis || dados.projeto || '-' },
     { label: 'PPV', value: dados.idPPV || '-' },
   ])
+
+  const marcaModelo = [dados.marca, dados.modelo].filter(Boolean).join(' / ')
+  if (marcaModelo) {
+    drawRow([
+      { label: 'Marca / Modelo', value: marcaModelo },
+      { label: 'Horímetro', value: dados.horimetro || '-' },
+    ])
+  }
 
   // --- Técnicos ---
   drawSectionTitle('TÉCNICOS')
