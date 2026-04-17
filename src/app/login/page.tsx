@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
@@ -9,7 +9,39 @@ export default function LoginPage() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
   const router = useRouter()
+
+  // Auto-redirect se já tem sessão ativa
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        // Tem sessão, verifica perfil cacheado
+        try {
+          const cached = localStorage.getItem('nt-mecanicos-profile')
+          if (cached) {
+            const profile = JSON.parse(cached)
+            router.replace(profile.role === 'admin' ? '/admin' : '/')
+            return
+          }
+        } catch { /* */ }
+        // Sem cache, redireciona pra home e deixa useCurrentUser resolver
+        router.replace('/')
+      } else {
+        setCheckingSession(false)
+      }
+    }).catch(() => {
+      setCheckingSession(false)
+    })
+  }, [router])
+
+  if (checkingSession) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1E3A5F 0%, #2D5A8E 100%)' }}>
+        <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: '#fff' }} />
+      </div>
+    )
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

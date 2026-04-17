@@ -1,12 +1,16 @@
-const CACHE_NAME = 'nt-mecanicos-v3';
+const CACHE_NAME = 'nt-mecanicos-v4';
 const OFFLINE_URL = '/';
 
 const PRECACHE_URLS = [
   '/',
+  '/login',
   '/os',
+  '/os-enviadas',
   '/requisicoes',
+  '/requisicoes-enviadas',
   '/diario',
   '/agenda',
+  '/perfil',
   '/manifest.json',
   '/capa_app.png',
   '/Logo_Nova.png',

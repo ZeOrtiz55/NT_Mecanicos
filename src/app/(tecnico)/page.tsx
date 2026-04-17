@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useCached } from '@/hooks/useCached'
 import { supabase } from '@/lib/supabase'
+import { offlineWrite } from '@/lib/offlineWrite'
 import type { OrdemServico, AgendaItem } from '@/lib/types'
 import {
   AlertTriangle, MapPin, ChevronRight, Clock, Navigation,
@@ -122,8 +123,8 @@ export default function TecnicoHome() {
     const hoje = new Date().toISOString().split('T')[0]
     const hora = horaAtual()
 
-    // 1. Salvar no Diario_Tecnico
-    const { error } = await supabase.from('Diario_Tecnico').insert({
+    // 1. Salvar no Diario_Tecnico (com fallback offline)
+    const diarioData = {
       tecnico_nome: nome,
       data: hoje,
       id_ordem: null,
@@ -133,37 +134,39 @@ export default function TecnicoHome() {
       status: 'em_rota',
       hora_saida_origem: hora,
       tempo_estimado_min: camTempoEstimado ? parseInt(camTempoEstimado) : null,
-    })
-
-    if (error) { setCamSaving(false); alert('Erro ao salvar: ' + error.message); return }
+    }
+    const res = await offlineWrite({ table: 'Diario_Tecnico', action: 'insert', data: diarioData })
+    if (!res.ok) { setCamSaving(false); alert('Erro ao salvar: ' + (res.error || 'Erro desconhecido')); return }
 
     // 2. Inserir na agenda_visao para aparecer no painel mecânicos do portal
-    await supabase.from('agenda_visao').insert({
-      data: hoje,
-      tecnico_nome: nome,
-      id_ordem: null,
-      cliente: camCliente.trim(),
-      servico: camDescricao.trim() || 'Visita avulsa',
-      cidade: camCidade.trim(),
-      endereco: camCidade.trim(),
-      qtd_horas: camTempoEstimado ? Math.ceil(parseInt(camTempoEstimado) / 60) : 1,
-      status: 'em_rota',
-      observacoes: `Caminho registrado pelo técnico às ${hora}`,
-      hora_inicio: hora,
-    }).then(() => {})
+    await offlineWrite({
+      table: 'agenda_visao', action: 'insert',
+      data: {
+        data: hoje, tecnico_nome: nome, id_ordem: null,
+        cliente: camCliente.trim(),
+        servico: camDescricao.trim() || 'Visita avulsa',
+        cidade: camCidade.trim(), endereco: camCidade.trim(),
+        qtd_horas: camTempoEstimado ? Math.ceil(parseInt(camTempoEstimado) / 60) : 1,
+        status: 'em_rota',
+        observacoes: `Caminho registrado pelo técnico às ${hora}`,
+        hora_inicio: hora,
+      },
+    })
 
-    // 3. Notificar portal
-    const usuarios = await getUsuariosPortalPainel()
-    if (usuarios.length > 0) {
-      await supabase.from('portal_notificacoes').insert(
-        usuarios.map((u: { user_id: string }) => ({
-          user_id: u.user_id,
-          tipo: 'caminho_tecnico',
-          titulo: `Novo caminho — ${nome.split(' ')[0]}`,
-          descricao: `${nome} saiu para ${camCliente.trim()} em ${camCidade.trim()}`,
-          link: '/pos/painel-mecanicos',
-        }))
-      )
+    // 3. Notificar portal (só se online)
+    if (navigator.onLine) {
+      const usuarios = await getUsuariosPortalPainel()
+      if (usuarios.length > 0) {
+        await supabase.from('portal_notificacoes').insert(
+          usuarios.map((u: { user_id: string }) => ({
+            user_id: u.user_id,
+            tipo: 'caminho_tecnico',
+            titulo: `Novo caminho — ${nome.split(' ')[0]}`,
+            descricao: `${nome} saiu para ${camCliente.trim()} em ${camCidade.trim()}`,
+            link: '/pos/painel-mecanicos',
+          }))
+        )
+      }
     }
 
     setCamSaving(false)

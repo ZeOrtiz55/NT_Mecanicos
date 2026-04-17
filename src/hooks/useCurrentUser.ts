@@ -4,9 +4,30 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { MecanicoProfile } from '@/lib/types'
 
+const PROFILE_KEY = 'nt-mecanicos-profile'
+
+function getCachedProfile(): MecanicoProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function setCachedProfile(profile: MecanicoProfile) {
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
+  } catch { /* quota exceeded, ignore */ }
+}
+
+function clearCachedProfile() {
+  try { localStorage.removeItem(PROFILE_KEY) } catch { /* */ }
+}
+
 export function useCurrentUser() {
-  const [user, setUser] = useState<MecanicoProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<MecanicoProfile | null>(() => getCachedProfile())
+  const [loading, setLoading] = useState(() => !getCachedProfile())
   const router = useRouter()
   const routerRef = useRef(router)
   routerRef.current = router
@@ -23,6 +44,12 @@ export function useCurrentUser() {
         const { data: { session } } = await supabase.auth.getSession()
 
         if (!session) {
+          // Se offline e tem perfil cacheado, usa o cache
+          if (!navigator.onLine && getCachedProfile()) {
+            setLoading(false)
+            return
+          }
+          clearCachedProfile()
           routerRef.current.replace('/login')
           return
         }
@@ -50,7 +77,7 @@ export function useCurrentUser() {
             return
           }
 
-          setUser({
+          const profile: MecanicoProfile = {
             id: session.user.id,
             tecnico_nome: portalProfile?.nome || 'Usuário',
             tecnico_email: portalProfile?.email || session.user.email || '',
@@ -60,7 +87,9 @@ export function useCurrentUser() {
             role: perm.is_admin ? 'admin' : 'tecnico',
             nome_pos: perm.mecanico_tecnico_nome || null,
             mecanico_role: perm.mecanico_role as 'tecnico' | 'observador' | null,
-          })
+          }
+          setUser(profile)
+          setCachedProfile(profile)
           setLoading(false)
           return
         }
@@ -109,13 +138,20 @@ export function useCurrentUser() {
 
           if (cancelled) return
           setUser(profile)
+          setCachedProfile(profile)
           setLoading(false)
           return
         }
 
+        clearCachedProfile()
         routerRef.current.replace('/login')
       } catch (err) {
         console.error('Erro ao carregar usuário:', err)
+        // Se offline e tem cache, usa o cache
+        if (!navigator.onLine && getCachedProfile()) {
+          setLoading(false)
+          return
+        }
         if (!cancelled) routerRef.current.replace('/login')
       }
     }
@@ -125,6 +161,7 @@ export function useCurrentUser() {
   }, [refreshKey])
 
   const logout = async () => {
+    clearCachedProfile()
     await supabase.auth.signOut()
     routerRef.current.replace('/login')
   }
