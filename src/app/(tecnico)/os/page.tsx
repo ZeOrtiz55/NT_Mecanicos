@@ -364,11 +364,14 @@ export default function OrdensHub() {
       const datasOrdenadas = [...datas].sort()
       const proximaData = datasOrdenadas.find(d => d >= hoje) || prev
 
-      // OS em fases não-execução (aguardando peças, cliente, orçamento, etc.)
-      const emExecucao = FASES_EXECUCAO.includes(o.Status)
-      const aguardando = FASES_AGUARDANDO.includes(o.Status) || o.Status.includes('Orçamento')
+      // OS em fases não-execução (aguardando cliente, etc.)
+      const aguardandoPecas = o.Status.includes('peças') || o.Status.includes('Procurando peças')
+      const aguardando = FASES_AGUARDANDO.includes(o.Status)
 
       if (aguardando) {
+        outras.push(o)
+      } else if (aguardandoPecas) {
+        // Aguardando peças nunca é atrasada — vai para "outras fases"
         outras.push(o)
       } else if (prev && prev < hoje && !datasOrdenadas.some(d => d >= hoje)) {
         atr.push(o)

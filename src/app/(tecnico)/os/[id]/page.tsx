@@ -53,6 +53,7 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
   const [os, setOs] = useState<OrdemServico | null>(null)
   const [jaPreenchida, setJaPreenchida] = useState(false)
   const [statusPreench, setStatusPreench] = useState('')
+  const [dataEnvio, setDataEnvio] = useState('')
   const [existingId, setExistingId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [cidade, setCidade] = useState('')
@@ -97,6 +98,7 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
         setExistingId(preench.IdOs)
         setJaPreenchida(true)
         setStatusPreench(preench.Status)
+        if (preench.Data) setDataEnvio(preench.Data)
 
         // Carregar dias já registrados
         const diasLoaded: DiaVisita[] = []
@@ -245,6 +247,13 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
   if (!os) return <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>OS não encontrada</div>
 
   const jaEnviada = jaPreenchida && statusPreench === 'enviado'
+  const dentroPrazo48h = (() => {
+    if (!dataEnvio) return false
+    const envio = new Date(dataEnvio + 'T00:00:00')
+    const agora = new Date()
+    const diffMs = agora.getTime() - envio.getTime()
+    return diffMs < 48 * 60 * 60 * 1000
+  })()
   const formatarData = (d: string) => {
     if (!d) return ''
     const [y, m, day] = d.split('-')
@@ -534,25 +543,39 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
 
       {/* Fill/edit button */}
       {jaEnviada ? (
-        <Link href={`/os/${os.Id_Ordem}/preencher`} style={{
-          display: 'flex', alignItems: 'center', gap: 14,
-          background: '#D97706', color: '#fff', borderRadius: 16, padding: '22px 20px',
-          textDecoration: 'none',
-          boxShadow: '0 6px 20px rgba(217,119,6,0.3)',
-        }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14,
-            background: 'rgba(255,255,255,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
+        dentroPrazo48h ? (
+          <Link href={`/os/${os.Id_Ordem}/preencher`} style={{
+            display: 'flex', alignItems: 'center', gap: 14,
+            background: '#D97706', color: '#fff', borderRadius: 16, padding: '22px 20px',
+            textDecoration: 'none',
+            boxShadow: '0 6px 20px rgba(217,119,6,0.3)',
           }}>
-            <ClipboardEdit size={26} />
+            <div style={{
+              width: 52, height: 52, borderRadius: 14,
+              background: 'rgba(255,255,255,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <ClipboardEdit size={26} />
+            </div>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>Editar OS Enviada</div>
+              <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>Você tem até 48h após o envio para corrigir</div>
+            </div>
+          </Link>
+        ) : (
+          <div style={{
+            background: '#D1FAE5', borderRadius: 16, padding: '20px 18px',
+            display: 'flex', alignItems: 'center', gap: 14,
+            border: '2px solid #6EE7B7',
+          }}>
+            <CheckCircle size={28} color="#059669" />
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#059669' }}>OS enviada</div>
+              <div style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>Prazo de 48h para edição expirado.</div>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>Editar OS Enviada</div>
-            <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>Toque para corrigir e reenviar o relatório</div>
-          </div>
-        </Link>
+        )
       ) : !horariosRegistrados ? (
         <div style={{
           background: '#F3F4F6', borderRadius: 16, padding: '20px 18px',

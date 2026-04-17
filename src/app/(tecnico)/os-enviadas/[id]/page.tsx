@@ -258,25 +258,43 @@ export default function OsEnviadaDetalhe({ params }: { params: Promise<{ id: str
       </p>
 
       {/* Botões: Editar + Gerar PDF */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <Link href={`/os/${id}/preencher`} style={{
-          flex: 1, padding: '16px 0', borderRadius: 14,
-          background: '#D97706', color: '#fff', border: 'none',
-          fontSize: 16, fontWeight: 700, textDecoration: 'none',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        }}>
-          <FileEdit size={20} /> Editar OS
-        </Link>
-        <button onClick={handleGerarPdf} disabled={gerandoPdf} style={{
-          flex: 1, padding: '16px 0', borderRadius: 14,
-          background: '#1E3A5F', color: '#fff', border: 'none',
-          fontSize: 16, fontWeight: 700, cursor: gerandoPdf ? 'not-allowed' : 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        }}>
-          {gerandoPdf ? <Loader2 size={20} className="spinner" /> : <FileDown size={20} />}
-          {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
-        </button>
-      </div>
+      {(() => {
+        const dataEnvio = (registro.Data as string) || ''
+        const envio = dataEnvio ? new Date(dataEnvio + 'T00:00:00') : null
+        const dentroPrazo = envio ? (Date.now() - envio.getTime()) < 48 * 60 * 60 * 1000 : false
+        return (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            {dentroPrazo ? (
+              <Link href={`/os/${id}/preencher`} style={{
+                flex: 1, padding: '16px 0', borderRadius: 14,
+                background: '#D97706', color: '#fff', border: 'none',
+                fontSize: 16, fontWeight: 700, textDecoration: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              }}>
+                <FileEdit size={20} /> Editar OS
+              </Link>
+            ) : (
+              <div style={{
+                flex: 1, padding: '16px 0', borderRadius: 14,
+                background: '#E5E7EB', color: '#9CA3AF',
+                fontSize: 14, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              }}>
+                <FileEdit size={20} /> Prazo expirado
+              </div>
+            )}
+            <button onClick={handleGerarPdf} disabled={gerandoPdf} style={{
+              flex: 1, padding: '16px 0', borderRadius: 14,
+              background: '#1E3A5F', color: '#fff', border: 'none',
+              fontSize: 16, fontWeight: 700, cursor: gerandoPdf ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            }}>
+              {gerandoPdf ? <Loader2 size={20} className="spinner" /> : <FileDown size={20} />}
+              {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Preview dos dados */}
       {/* Dados da Ordem */}

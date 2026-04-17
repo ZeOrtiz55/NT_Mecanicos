@@ -1,11 +1,12 @@
 'use client'
+import { useState } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useCached } from '@/hooks/useCached'
 import { supabase } from '@/lib/supabase'
 import type { OrdemServico, AgendaItem } from '@/lib/types'
 import {
   AlertTriangle, MapPin, ChevronRight, Clock, Navigation,
-  Wrench, ClipboardList, FilePlus, Compass, Calendar,
+  Wrench, ClipboardList, FilePlus, Compass, Calendar, X, Send, Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Card, ListRow, Section, PageSpinner, EmptyState, Badge } from '@/components/ui'
@@ -65,6 +66,9 @@ async function fetchHomeData(nome: string, tecnicoNome: string): Promise<HomeDat
   const osAtrasadas: OrdemServico[] = []
   for (const os of todas) {
     const prev = os.Previsao_Execucao?.trim?.() || ''
+    // Aguardando peças nunca é atrasada
+    const aguardandoPecas = os.Status?.includes('peças') || os.Status?.includes('Procurando peças')
+    if (aguardandoPecas) continue
     if (!prev || prev === hoje) osHoje.push(os)
     else if (prev < hoje) osAtrasadas.push(os)
   }
@@ -95,11 +99,37 @@ export default function TecnicoHome() {
   const { user } = useCurrentUser()
   const nome = user?.nome_pos || user?.tecnico_nome || ''
 
-  const { data, loading, refreshing } = useCached<HomeData>(
+  const { data, loading, refreshing, refresh } = useCached<HomeData>(
     `home:${nome}`,
     () => fetchHomeData(nome, user?.tecnico_nome || ''),
     { skip: !user },
   )
+
+  const [showModal, setShowModal] = useState(false)
+  const [camCliente, setCamCliente] = useState('')
+  const [camCidade, setCamCidade] = useState('')
+  const [camDescricao, setCamDescricao] = useState('')
+  const [camSaving, setCamSaving] = useState(false)
+
+  const salvarCaminho = async () => {
+    if (!camCliente.trim()) { alert('Informe o cliente.'); return }
+    if (!camCidade.trim()) { alert('Informe a cidade.'); return }
+    setCamSaving(true)
+    const { error } = await supabase.from('Diario_Tecnico').insert({
+      tecnico_nome: nome,
+      data: new Date().toISOString().split('T')[0],
+      id_ordem: null,
+      cliente: camCliente.trim(),
+      cidade_cliente: camCidade.trim(),
+      descricao: camDescricao.trim() || null,
+      status: 'em_rota',
+    })
+    setCamSaving(false)
+    if (error) { alert('Erro ao salvar: ' + error.message); return }
+    setCamCliente(''); setCamCidade(''); setCamDescricao('')
+    setShowModal(false)
+    refresh()
+  }
 
   if (loading) return <PageSpinner />
 
@@ -303,6 +333,75 @@ export default function TecnicoHome() {
           </div>
         </Link>
       </div>
+
+      {/* Botão Novo Caminho */}
+      <button onClick={() => setShowModal(true)} style={{
+        width: '100%', background: '#059669', borderRadius: radius.lg, padding: '14px 14px',
+        border: 'none', color: '#fff', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 10,
+        boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
+      }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: radius.md, flexShrink: 0,
+          background: 'rgba(255,255,255,0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Navigation size={18} />
+        </div>
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Novo Caminho</div>
+          <div style={{ fontSize: 11, opacity: 0.8 }}>Registrar visita avulsa</div>
+        </div>
+      </button>
+
+      {/* Modal Novo Caminho */}
+      {showModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: 20,
+        }} onClick={() => setShowModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: 20, padding: 24,
+            width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: colors.text, margin: 0 }}>Novo Caminho</h2>
+              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <X size={20} color={colors.textMuted} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: colors.textSubtle, display: 'block', marginBottom: 6 }}>Cliente *</label>
+                <input value={camCliente} onChange={e => setCamCliente(e.target.value)} placeholder="Nome do cliente"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: colors.textSubtle, display: 'block', marginBottom: 6 }}>Cidade *</label>
+                <input value={camCidade} onChange={e => setCamCidade(e.target.value)} placeholder="Cidade de destino"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: colors.textSubtle, display: 'block', marginBottom: 6 }}>Descrição</label>
+                <textarea value={camDescricao} onChange={e => setCamDescricao(e.target.value)} placeholder="O que vai fazer lá..."
+                  rows={3} style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', boxSizing: 'border-box', resize: 'vertical' }} />
+              </div>
+              <button onClick={salvarCaminho} disabled={camSaving} style={{
+                width: '100%', padding: '14px 0', borderRadius: 12,
+                background: camSaving ? '#9CA3AF' : '#059669', color: '#fff',
+                fontSize: 15, fontWeight: 700, border: 'none',
+                cursor: camSaving ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+                {camSaving ? <Loader2 size={18} className="spinner" /> : <Send size={18} />}
+                {camSaving ? 'Salvando...' : 'Registrar Caminho'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ height: 80 }} />
     </div>
