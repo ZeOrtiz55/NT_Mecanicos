@@ -38,11 +38,14 @@ export default function DashboardAdmin() {
       const reqList = req || []
       const tecnicosList = tecnicos || []
 
-      // Conta atrasos: agendados em dias anteriores que nao foram concluidos
+      // Conta atrasos: agendados >= 2 dias atrás que não foram concluídos (1 dia não é atraso)
+      const limiteAtraso = new Date()
+      limiteAtraso.setDate(limiteAtraso.getDate() - 1)
+      const limiteStr = limiteAtraso.toISOString().split('T')[0]
       const { data: atrasados } = await supabase
         .from('agenda_tecnico')
         .select('*')
-        .lt('data_agendada', hoje)
+        .lt('data_agendada', limiteStr)
         .in('status', ['agendado', 'em_andamento'])
 
       const atrasosList = atrasados || []

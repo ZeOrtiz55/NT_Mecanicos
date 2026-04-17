@@ -145,12 +145,16 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
     carregar()
   }, [id])
 
-  // Verificar se precisa justificar (data > previsão de execução)
+  // Verificar se precisa justificar (atraso >= 2 dias após previsão)
+  // 1 dia não é considerado atraso
   useEffect(() => {
     if (!os || !dias[0]?.data) return
     const previsao = os.Previsao_Execucao
-    if (previsao && dias[0].data > previsao) {
-      setPrecisaJustificar(true)
+    if (previsao) {
+      const prevDate = new Date(previsao + 'T00:00:00')
+      const diaDate = new Date(dias[0].data + 'T00:00:00')
+      const diffDias = Math.floor((diaDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+      setPrecisaJustificar(diffDias >= 2)
     } else {
       setPrecisaJustificar(false)
     }

@@ -374,7 +374,15 @@ export default function OrdensHub() {
         // Aguardando peças nunca é atrasada — vai para "outras fases"
         outras.push(o)
       } else if (prev && prev < hoje && !datasOrdenadas.some(d => d >= hoje)) {
-        atr.push(o)
+        // Só é atraso se >= 2 dias de diferença (1 dia não conta)
+        const prevDate = new Date(prev + 'T00:00:00')
+        const hojeDate = new Date(hoje + 'T00:00:00')
+        const diffDias = Math.floor((hojeDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+        if (diffDias >= 2) {
+          atr.push(o)
+        } else {
+          hoj.push(o) // 1 dia: mostra em "hoje"
+        }
       } else if (proximaData === hoje) {
         hoj.push(o)
       } else {

@@ -25,12 +25,16 @@ export default function TecnicosPage() {
 
   const carregar = async () => {
     const hoje = new Date().toISOString().split('T')[0]
+    // 1 dia não é atraso — só conta >= 2 dias
+    const limiteAtraso = new Date()
+    limiteAtraso.setDate(limiteAtraso.getDate() - 1)
+    const limiteStr = limiteAtraso.toISOString().split('T')[0]
 
     const [{ data: tecData }, { data: osData }, { data: agendaData }, { data: atrasosData }] = await Promise.all([
       supabase.from('mecanico_usuarios').select('*').order('tecnico_nome'),
       supabase.from('Ordem_Servico').select('Os_Tecnico, Os_Tecnico2').not('Status', 'in', '("Concluida","Cancelada")'),
       supabase.from('agenda_tecnico').select('tecnico_nome').eq('data_agendada', hoje),
-      supabase.from('agenda_tecnico').select('tecnico_nome').lt('data_agendada', hoje).in('status', ['agendado', 'em_andamento']),
+      supabase.from('agenda_tecnico').select('tecnico_nome').lt('data_agendada', limiteStr).in('status', ['agendado', 'em_andamento']),
     ])
 
     const tecList = (tecData || []) as MecanicoProfile[]
