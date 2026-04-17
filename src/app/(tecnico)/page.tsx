@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase'
 import type { OrdemServico, AgendaItem } from '@/lib/types'
 import {
   AlertTriangle, MapPin, ChevronRight, Clock, Navigation,
-  Wrench, ClipboardList, FilePlus, Compass, Calendar, X, Send, Loader2,
+  Wrench, ClipboardList, FilePlus, Compass, Calendar, X, Loader2,
+  Route, User, FileText,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Card, ListRow, Section, PageSpinner, EmptyState, Badge } from '@/components/ui'
@@ -109,26 +110,77 @@ export default function TecnicoHome() {
   const [camCliente, setCamCliente] = useState('')
   const [camCidade, setCamCidade] = useState('')
   const [camDescricao, setCamDescricao] = useState('')
+  const [camTempoEstimado, setCamTempoEstimado] = useState('')
   const [camSaving, setCamSaving] = useState(false)
+
+  const horaAtual = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
   const salvarCaminho = async () => {
     if (!camCliente.trim()) { alert('Informe o cliente.'); return }
     if (!camCidade.trim()) { alert('Informe a cidade.'); return }
     setCamSaving(true)
+    const hoje = new Date().toISOString().split('T')[0]
+    const hora = horaAtual()
+
+    // 1. Salvar no Diario_Tecnico
     const { error } = await supabase.from('Diario_Tecnico').insert({
       tecnico_nome: nome,
-      data: new Date().toISOString().split('T')[0],
+      data: hoje,
       id_ordem: null,
       cliente: camCliente.trim(),
       cidade_cliente: camCidade.trim(),
       descricao: camDescricao.trim() || null,
       status: 'em_rota',
+      hora_saida_origem: hora,
+      tempo_estimado_min: camTempoEstimado ? parseInt(camTempoEstimado) : null,
     })
+
+    if (error) { setCamSaving(false); alert('Erro ao salvar: ' + error.message); return }
+
+    // 2. Inserir na agenda_visao para aparecer no painel mecânicos do portal
+    await supabase.from('agenda_visao').insert({
+      data: hoje,
+      tecnico_nome: nome,
+      id_ordem: null,
+      cliente: camCliente.trim(),
+      servico: camDescricao.trim() || 'Visita avulsa',
+      cidade: camCidade.trim(),
+      endereco: camCidade.trim(),
+      qtd_horas: camTempoEstimado ? Math.ceil(parseInt(camTempoEstimado) / 60) : 1,
+      status: 'em_rota',
+      observacoes: `Caminho registrado pelo técnico às ${hora}`,
+      hora_inicio: hora,
+    }).then(() => {})
+
+    // 3. Notificar portal
+    const usuarios = await getUsuariosPortalPainel()
+    if (usuarios.length > 0) {
+      await supabase.from('portal_notificacoes').insert(
+        usuarios.map((u: { user_id: string }) => ({
+          user_id: u.user_id,
+          tipo: 'caminho_tecnico',
+          titulo: `Novo caminho — ${nome.split(' ')[0]}`,
+          descricao: `${nome} saiu para ${camCliente.trim()} em ${camCidade.trim()}`,
+          link: '/pos/painel-mecanicos',
+        }))
+      )
+    }
+
     setCamSaving(false)
-    if (error) { alert('Erro ao salvar: ' + error.message); return }
-    setCamCliente(''); setCamCidade(''); setCamDescricao('')
+    setCamCliente(''); setCamCidade(''); setCamDescricao(''); setCamTempoEstimado('')
     setShowModal(false)
     refresh()
+  }
+
+  async function getUsuariosPortalPainel() {
+    const { data: permissoes } = await supabase
+      .from('portal_permissoes')
+      .select('user_id, is_admin, modulos_permitidos')
+    if (!permissoes || permissoes.length === 0) return []
+    return permissoes.filter(
+      (p: { is_admin: boolean; modulos_permitidos: string[] | null }) =>
+        p.is_admin || (p.modulos_permitidos && p.modulos_permitidos.includes('painel-mecanicos'))
+    )
   }
 
   if (loading) return <PageSpinner />
@@ -294,109 +346,134 @@ export default function TecnicoHome() {
       </Section>
 
       {/* ═══ AÇÕES RÁPIDAS ═══ */}
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
         <Link href="/requisicoes/nova" style={{
-          flex: 1, background: colors.primary, borderRadius: radius.lg, padding: '14px 14px',
-          textDecoration: 'none', color: '#fff',
-          display: 'flex', alignItems: 'center', gap: 10,
-          boxShadow: shadow.primary,
+          background: colors.surface, borderRadius: radius.lg, padding: '16px 10px',
+          textDecoration: 'none', border: `1px solid ${colors.border}`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
           <div style={{
-            width: 38, height: 38, borderRadius: radius.md, flexShrink: 0,
-            background: 'rgba(255,255,255,0.18)',
+            width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+            background: colors.primaryBg,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <FilePlus size={18} />
+            <FilePlus size={18} color={colors.primary} />
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Nova Requisição</div>
-            <div style={{ fontSize: 11, opacity: 0.8 }}>Solicitar material</div>
-          </div>
+          <span style={{ fontSize: 11, fontWeight: 600, color: colors.text, textAlign: 'center' }}>Requisição</span>
         </Link>
 
         <Link href="/agenda" style={{
-          flex: 1, background: colors.accent, borderRadius: radius.lg, padding: '14px 14px',
-          textDecoration: 'none', color: '#fff',
-          display: 'flex', alignItems: 'center', gap: 10,
-          boxShadow: shadow.accent,
+          background: colors.surface, borderRadius: radius.lg, padding: '16px 10px',
+          textDecoration: 'none', border: `1px solid ${colors.border}`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
           <div style={{
-            width: 38, height: 38, borderRadius: radius.md, flexShrink: 0,
-            background: 'rgba(255,255,255,0.18)',
+            width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+            background: colors.accentBg,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Calendar size={18} />
+            <Calendar size={18} color={colors.accent} />
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Agenda</div>
-            <div style={{ fontSize: 11, opacity: 0.8 }}>Ver semana</div>
-          </div>
+          <span style={{ fontSize: 11, fontWeight: 600, color: colors.text, textAlign: 'center' }}>Agenda</span>
         </Link>
-      </div>
 
-      {/* Botão Novo Caminho */}
-      <button onClick={() => setShowModal(true)} style={{
-        width: '100%', background: '#059669', borderRadius: radius.lg, padding: '14px 14px',
-        border: 'none', color: '#fff', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 10,
-        boxShadow: '0 4px 12px rgba(5,150,105,0.3)',
-      }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: radius.md, flexShrink: 0,
-          background: 'rgba(255,255,255,0.18)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        <button onClick={() => setShowModal(true)} style={{
+          background: colors.surface, borderRadius: radius.lg, padding: '16px 10px',
+          border: `1px solid ${colors.border}`, cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
-          <Navigation size={18} />
-        </div>
-        <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Novo Caminho</div>
-          <div style={{ fontSize: 11, opacity: 0.8 }}>Registrar visita avulsa</div>
-        </div>
-      </button>
+          <div style={{
+            width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+            background: colors.successBg,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Route size={18} color={colors.success} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 600, color: colors.text, textAlign: 'center' }}>Caminho</span>
+        </button>
+      </div>
 
       {/* Modal Novo Caminho */}
       {showModal && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.5)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: 20,
+          background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
         }} onClick={() => setShowModal(false)}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: '#fff', borderRadius: 20, padding: 24,
-            width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            background: '#fff', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px',
+            width: '100%', maxWidth: 480,
+            boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+            maxHeight: '90vh', overflowY: 'auto',
           }}>
+            {/* Handle bar */}
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#D1D5DB', margin: '0 auto 16px' }} />
+
+            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: colors.text, margin: 0 }}>Novo Caminho</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                <X size={20} color={colors.textMuted} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: colors.successBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Route size={18} color={colors.success} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, color: colors.text, margin: 0 }}>Novo Caminho</h2>
+                  <div style={{ fontSize: 12, color: colors.textMuted }}>{new Date().toLocaleDateString('pt-BR')} - {horaAtual()}</div>
+                </div>
+              </div>
+              <button onClick={() => setShowModal(false)} style={{ background: colors.surface, border: 'none', cursor: 'pointer', padding: 6, borderRadius: 8 }}>
+                <X size={18} color={colors.textMuted} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Cliente */}
               <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: colors.textSubtle, display: 'block', marginBottom: 6 }}>Cliente *</label>
-                <input value={camCliente} onChange={e => setCamCliente(e.target.value)} placeholder="Nome do cliente"
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSubtle, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                  <User size={12} /> Cliente
+                </label>
+                <input value={camCliente} onChange={e => setCamCliente(e.target.value)} placeholder="Nome do cliente ou empresa"
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${colors.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#FAFAFA' }} />
               </div>
+
+              {/* Cidade */}
               <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: colors.textSubtle, display: 'block', marginBottom: 6 }}>Cidade *</label>
-                <input value={camCidade} onChange={e => setCamCidade(e.target.value)} placeholder="Cidade de destino"
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSubtle, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                  <MapPin size={12} /> Destino (Cidade)
+                </label>
+                <input value={camCidade} onChange={e => setCamCidade(e.target.value)} placeholder="Ex: Piraju, Avaré..."
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${colors.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#FAFAFA' }} />
               </div>
+
+              {/* Tempo estimado */}
               <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: colors.textSubtle, display: 'block', marginBottom: 6 }}>Descrição</label>
-                <textarea value={camDescricao} onChange={e => setCamDescricao(e.target.value)} placeholder="O que vai fazer lá..."
-                  rows={3} style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '2px solid #E5E7EB', fontSize: 15, outline: 'none', boxSizing: 'border-box', resize: 'vertical' }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSubtle, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                  <Clock size={12} /> Tempo estimado de serviço (minutos)
+                </label>
+                <input type="number" value={camTempoEstimado} onChange={e => setCamTempoEstimado(e.target.value)} placeholder="Ex: 120"
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${colors.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#FAFAFA' }} />
               </div>
-              <button onClick={salvarCaminho} disabled={camSaving} style={{
-                width: '100%', padding: '14px 0', borderRadius: 12,
-                background: camSaving ? '#9CA3AF' : '#059669', color: '#fff',
+
+              {/* Descrição */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: colors.textSubtle, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                  <FileText size={12} /> Descrição do serviço
+                </label>
+                <textarea value={camDescricao} onChange={e => setCamDescricao(e.target.value)} placeholder="Descreva brevemente o motivo da visita..."
+                  rows={3} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${colors.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', resize: 'vertical', background: '#FAFAFA', lineHeight: 1.5 }} />
+              </div>
+
+              {/* Botão */}
+              <button onClick={salvarCaminho} disabled={camSaving || !camCliente.trim() || !camCidade.trim()} style={{
+                width: '100%', padding: '13px 0', borderRadius: 12, marginTop: 4,
+                background: (!camCliente.trim() || !camCidade.trim()) ? '#E5E7EB' : colors.accent,
+                color: (!camCliente.trim() || !camCidade.trim()) ? '#9CA3AF' : '#fff',
                 fontSize: 15, fontWeight: 700, border: 'none',
                 cursor: camSaving ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                opacity: camSaving ? 0.7 : 1,
               }}>
-                {camSaving ? <Loader2 size={18} className="spinner" /> : <Send size={18} />}
-                {camSaving ? 'Salvando...' : 'Registrar Caminho'}
+                {camSaving ? <Loader2 size={18} className="spinner" /> : <Navigation size={18} />}
+                {camSaving ? 'Registrando...' : 'Iniciar Caminho'}
               </button>
             </div>
           </div>
