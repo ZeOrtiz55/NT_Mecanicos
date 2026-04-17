@@ -92,14 +92,48 @@ function formatarDataBR(dateStr: string) {
 
 async function loadImageAsBase64(url: string): Promise<string | null> {
   if (!url) return null
+  // Ignora blob: URLs que não são válidas fora do navegador
+  if (url.startsWith('blob:')) return null
   try {
-    const resp = await fetch(url)
-    const blob = await resp.blob()
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = () => resolve(null)
-      reader.readAsDataURL(blob)
+    // Tenta fetch primeiro (funciona se CORS permite)
+    const resp = await fetch(url, { mode: 'cors' })
+    if (resp.ok) {
+      const blob = await resp.blob()
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = () => resolve(null)
+        reader.readAsDataURL(blob)
+      })
+    }
+  } catch {
+    // CORS bloqueou, tenta via Image element (bypass CORS)
+  }
+  // Fallback: carrega via <img> crossOrigin
+  try {
+    return await new Promise((resolve) => {
+      const img = new window.Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth
+          canvas.height = img.naturalHeight
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(img, 0, 0)
+            resolve(canvas.toDataURL('image/jpeg', 0.85))
+          } else {
+            resolve(null)
+          }
+        } catch {
+          resolve(null)
+        }
+      }
+      img.onerror = () => resolve(null)
+      // Timeout de 10s
+      setTimeout(() => resolve(null), 10000)
+      img.src = url
     })
   } catch {
     return null

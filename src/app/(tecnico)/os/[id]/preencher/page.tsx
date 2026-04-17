@@ -307,9 +307,15 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
   }
 
   const handleFoto = async (setter: (v: string) => void, campo: string, file: File) => {
-    setter(URL.createObjectURL(file))
+    const preview = URL.createObjectURL(file)
+    setter(preview)
     const url = await uploadFoto(file, campo)
-    if (url) setter(url)
+    if (url) {
+      setter(url)
+    } else {
+      // Upload falhou — manter preview mas avisar
+      console.warn(`[foto] Upload falhou para ${campo}, mantendo preview local`)
+    }
   }
 
   const calcTotalHoras = () => {
@@ -400,13 +406,22 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
       FinaHora3: dias[2]?.horaFim || '',
       InicioKm3: '',
       FinalKm3: '',
-      FotoHorimetro: fotoHorimetro, FotoChassis: fotoChassis,
-      FotoFrente: fotoFrente, FotoDireita: fotoDireita,
-      FotoEsquerda: fotoEsquerda, FotoTraseira: fotoTraseira, FotoVolante: fotoVolante,
-      FotoFalha1: fotoFalha1, FotoFalha2: fotoFalha2,
-      FotoFalha3: fotoFalha3, FotoFalha4: fotoFalha4,
-      FotoPecaNova1: fotoPecaNova1, FotoPecaNova2: fotoPecaNova2,
-      FotoPecaInstalada1: fotoPecaInstalada1, FotoPecaInstalada2: fotoPecaInstalada2,
+      // Nunca salvar blob: URLs — se upload falhou, salvar vazio
+      FotoHorimetro: fotoHorimetro.startsWith('blob:') ? '' : fotoHorimetro,
+      FotoChassis: fotoChassis.startsWith('blob:') ? '' : fotoChassis,
+      FotoFrente: fotoFrente.startsWith('blob:') ? '' : fotoFrente,
+      FotoDireita: fotoDireita.startsWith('blob:') ? '' : fotoDireita,
+      FotoEsquerda: fotoEsquerda.startsWith('blob:') ? '' : fotoEsquerda,
+      FotoTraseira: fotoTraseira.startsWith('blob:') ? '' : fotoTraseira,
+      FotoVolante: fotoVolante.startsWith('blob:') ? '' : fotoVolante,
+      FotoFalha1: fotoFalha1.startsWith('blob:') ? '' : fotoFalha1,
+      FotoFalha2: fotoFalha2.startsWith('blob:') ? '' : fotoFalha2,
+      FotoFalha3: fotoFalha3.startsWith('blob:') ? '' : fotoFalha3,
+      FotoFalha4: fotoFalha4.startsWith('blob:') ? '' : fotoFalha4,
+      FotoPecaNova1: fotoPecaNova1.startsWith('blob:') ? '' : fotoPecaNova1,
+      FotoPecaNova2: fotoPecaNova2.startsWith('blob:') ? '' : fotoPecaNova2,
+      FotoPecaInstalada1: fotoPecaInstalada1.startsWith('blob:') ? '' : fotoPecaInstalada1,
+      FotoPecaInstalada2: fotoPecaInstalada2.startsWith('blob:') ? '' : fotoPecaInstalada2,
       AssCliente: assCliente, AssTecnico: assTecnico,
       PecasInfo: JSON.stringify(pecas),
       JustificativaPecaExtra: justificativaPecaExtra || null,
