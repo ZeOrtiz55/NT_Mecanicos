@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useFormBackup } from '@/hooks/useFormBackup'
 import { useRouter } from 'next/navigation'
@@ -84,7 +84,15 @@ export default function NovaSolicitacao() {
     setForm(prev => ({ ...prev, ...rest as Partial<typeof prev> }))
   }, [])
 
-  const { clear: clearBackup } = useFormBackup('req-nova', getFormData, setFormData)
+  const { clear: clearBackup, restore: restoreBackup } = useFormBackup('req-nova', getFormData, setFormData)
+
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!restoredRef.current) {
+      restoredRef.current = true
+      restoreBackup()
+    }
+  }, [restoreBackup])
 
   useEffect(() => {
     if (!user) return

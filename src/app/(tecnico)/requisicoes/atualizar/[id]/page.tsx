@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { use } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useFormBackup } from '@/hooks/useFormBackup'
@@ -60,7 +60,15 @@ export default function AtualizarRequisicao({ params }: { params: Promise<{ id: 
     }))
   }, [])
 
-  const { clear: clearBackup } = useFormBackup(`req-atualizar-${id}`, getFormData, setFormData)
+  const { clear: clearBackup, restore: restoreBackup } = useFormBackup(`req-atualizar-${id}`, getFormData, setFormData)
+
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!loading && !restoredRef.current) {
+      restoredRef.current = true
+      restoreBackup()
+    }
+  }, [loading, restoreBackup])
 
   useEffect(() => {
     const carregar = async () => {

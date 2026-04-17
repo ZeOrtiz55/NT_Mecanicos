@@ -1,14 +1,15 @@
 'use client'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, Calendar, Wrench, ClipboardList, Users } from 'lucide-react'
+import { Home, Calendar, Wrench, ClipboardList, Users, Camera } from 'lucide-react'
 
 const tabs = [
   { href: '/admin', icon: Home, label: 'Painel' },
   { href: '/admin/agenda', icon: Calendar, label: 'Agenda' },
   { href: '/admin/os', icon: Wrench, label: 'Ordens' },
-  { href: '/admin/requisicoes', icon: ClipboardList, label: 'Requisicoes' },
-  { href: '/admin/tecnicos', icon: Users, label: 'Tecnicos' },
+  { href: '/admin/fotos', icon: Camera, label: 'Fotos' },
+  { href: '/admin/requisicoes', icon: ClipboardList, label: 'Requisições' },
+  { href: '/admin/tecnicos', icon: Users, label: 'Técnicos' },
 ]
 
 interface BottomNavProps {
@@ -34,7 +35,7 @@ export default function BottomNav({ reqPendentes = 0 }: BottomNavProps) {
         return (
           <Link key={tab.href} href={tab.href} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: 2, textDecoration: 'none', padding: '6px 12px',
+            gap: 2, textDecoration: 'none', padding: '6px 6px',
             color: isActive ? '#1E3A5F' : '#9CA3AF',
             position: 'relative',
           }}>

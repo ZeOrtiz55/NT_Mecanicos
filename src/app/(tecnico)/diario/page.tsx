@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useFormBackup } from '@/hooks/useFormBackup'
 import { supabase } from '@/lib/supabase'
@@ -108,7 +108,15 @@ export default function DiarioTecnico() {
     if (data.justificativa) setJustificativa(data.justificativa as string)
   }, [])
 
-  const { clear: clearBackup } = useFormBackup('diario-campo', getFormData, setFormData)
+  const { clear: clearBackup, restore: restoreBackup } = useFormBackup('diario-campo', getFormData, setFormData)
+
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!loading && !restoredRef.current) {
+      restoredRef.current = true
+      restoreBackup()
+    }
+  }, [loading, restoreBackup])
 
   const carregar = useCallback(async () => {
     if (!user) return

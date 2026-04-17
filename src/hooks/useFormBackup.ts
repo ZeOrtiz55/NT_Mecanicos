@@ -2,14 +2,15 @@ import { useEffect, useCallback, useRef } from 'react'
 
 /**
  * Salva automaticamente o estado do formulário no localStorage.
- * Restaura ao montar o componente (se tiver dados salvos).
  *
  * Uso:
- *   const { restore, clear } = useFormBackup(`os-preencher-${id}`, getFormData, setFormData)
+ *   const { restore, clear, saveNow } = useFormBackup(`os-preencher-${id}`, getFormData, setFormData)
  *
  * - getFormData: função que retorna todos os campos do form como objeto
  * - setFormData: função que recebe o objeto e seta os campos
+ * - Chame restore() manualmente APÓS carregar dados iniciais (Supabase, etc.)
  * - Chame clear() após salvar/enviar com sucesso
+ * - Chame saveNow() para forçar um save imediato
  */
 export function useFormBackup(
   key: string,
@@ -22,64 +23,35 @@ export function useFormBackup(
   getRef.current = getFormData
   const setRef = useRef(setFormData)
   setRef.current = setFormData
-  const restoredRef = useRef(false)
 
-  // Restaurar dados salvos ao montar
-  useEffect(() => {
-    if (restoredRef.current) return
+  const save = useCallback(() => {
     try {
-      const saved = localStorage.getItem(prefixedKey)
-      if (saved) {
-        const data = JSON.parse(saved)
-        if (data && typeof data === 'object') {
-          setRef.current(data)
-          restoredRef.current = true
-          console.log(`[backup] Restaurado: ${key}`)
-        }
+      const data = getRef.current()
+      // Só salva se tem algum dado preenchido
+      const hasData = Object.values(data).some(v =>
+        v !== '' && v !== false && v !== null && v !== undefined &&
+        !(Array.isArray(v) && v.length === 0)
+      )
+      if (hasData) {
+        localStorage.setItem(prefixedKey, JSON.stringify({ _t: Date.now(), ...data }))
       }
     } catch {
-      // dados corrompidos, ignora
+      // storage cheio ou indisponível
     }
-  }, [prefixedKey, key])
+  }, [prefixedKey])
 
-  // Salvar a cada 2 segundos se houver mudanças
+  // Salvar a cada 1 segundo
   useEffect(() => {
-    const interval = setInterval(() => {
-      try {
-        const data = getRef.current()
-        // Só salva se tem algum dado preenchido
-        const hasData = Object.values(data).some(v =>
-          v !== '' && v !== false && v !== null && v !== undefined &&
-          !(Array.isArray(v) && v.length === 0)
-        )
-        if (hasData) {
-          localStorage.setItem(prefixedKey, JSON.stringify(data))
-        }
-      } catch {
-        // storage cheio ou indisponível
-      }
-    }, 2000)
-
+    const interval = setInterval(save, 1000)
     return () => clearInterval(interval)
-  }, [prefixedKey, ...deps])
+  }, [save, ...deps])
 
-  // Salvar quando minimiza/troca de aba
+  // Salvar quando minimiza/troca de aba/fecha
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        try {
-          const data = getRef.current()
-          localStorage.setItem(prefixedKey, JSON.stringify(data))
-        } catch {}
-      }
+      if (document.visibilityState === 'hidden') save()
     }
-
-    const handleBeforeUnload = () => {
-      try {
-        const data = getRef.current()
-        localStorage.setItem(prefixedKey, JSON.stringify(data))
-      } catch {}
-    }
+    const handleBeforeUnload = () => save()
 
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -90,7 +62,27 @@ export function useFormBackup(
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('pagehide', handleBeforeUnload)
     }
-  }, [prefixedKey])
+  }, [save])
+
+  // Restaurar dados salvos — chamar manualmente APÓS carregar dados do servidor
+  const restore = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(prefixedKey)
+      if (saved) {
+        const data = JSON.parse(saved)
+        if (data && typeof data === 'object') {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { _t, ...fields } = data
+          setRef.current(fields)
+          console.log(`[backup] Restaurado: ${key}`)
+          return true
+        }
+      }
+    } catch {
+      // dados corrompidos, ignora
+    }
+    return false
+  }, [prefixedKey, key])
 
   // Limpar backup após envio com sucesso
   const clear = useCallback(() => {
@@ -98,5 +90,5 @@ export function useFormBackup(
     console.log(`[backup] Limpo: ${key}`)
   }, [prefixedKey, key])
 
-  return { clear }
+  return { restore, clear, saveNow: save }
 }

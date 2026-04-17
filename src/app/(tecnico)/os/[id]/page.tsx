@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { use } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
@@ -75,7 +75,15 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
     if (data.justificativa) setJustificativa(data.justificativa as string)
   }, [])
 
-  const { clear: clearBackup } = useFormBackup(`os-horarios-${id}`, getFormData, setFormData)
+  const { clear: clearBackup, restore: restoreBackup } = useFormBackup(`os-horarios-${id}`, getFormData, setFormData)
+
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!loading && !restoredRef.current) {
+      restoredRef.current = true
+      restoreBackup()
+    }
+  }, [loading, restoreBackup])
 
   useEffect(() => {
     const carregar = async () => {

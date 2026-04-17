@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { use } from 'react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useFormBackup } from '@/hooks/useFormBackup'
@@ -248,44 +248,54 @@ export default function PreencherOS({ params }: { params: Promise<{ id: string }
   ])
 
   const setFormData = useCallback((data: Record<string, unknown>) => {
-    if (data.tecResp1) setTecResp1(data.tecResp1 as string)
+    if (data.tecResp1 !== undefined) setTecResp1(data.tecResp1 as string)
     if (data.temTec2 !== undefined) setTemTec2(data.temTec2 as boolean)
-    if (data.tecResp2) setTecResp2(data.tecResp2 as string)
-    if (data.diagnostico) setDiagnostico(data.diagnostico as string)
-    if (data.servicoRealizado) setServicoRealizado(data.servicoRealizado as string)
-    if (data.tipoServico) setTipoServico(data.tipoServico as string)
-    if (data.tipoRev) setTipoRev(data.tipoRev as string)
-    if (data.projeto) setProjeto(data.projeto as string)
-    if (data.chassis) setChassis(data.chassis as string)
-    if (data.marca) setMarca(data.marca as string)
-    if (data.modelo) setModelo(data.modelo as string)
-    if (data.horimetro) setHorimetro(data.horimetro as string)
-    if (data.numPlaca) setNumPlaca(data.numPlaca as string)
-    if (data.nomResp) setNomResp(data.nomResp as string)
-    if (data.dias) setDias(data.dias as DiaForm[])
-    if (data.pecas) setPecas(data.pecas as PecaInfo[])
+    if (data.tecResp2 !== undefined) setTecResp2(data.tecResp2 as string)
+    if (data.diagnostico !== undefined) setDiagnostico(data.diagnostico as string)
+    if (data.servicoRealizado !== undefined) setServicoRealizado(data.servicoRealizado as string)
+    if (data.tipoServico !== undefined) setTipoServico(data.tipoServico as string)
+    if (data.tipoRev !== undefined) setTipoRev(data.tipoRev as string)
+    if (data.projeto !== undefined) setProjeto(data.projeto as string)
+    if (data.chassis !== undefined) setChassis(data.chassis as string)
+    if (data.marca !== undefined) setMarca(data.marca as string)
+    if (data.modelo !== undefined) setModelo(data.modelo as string)
+    if (data.horimetro !== undefined) setHorimetro(data.horimetro as string)
+    if (data.numPlaca !== undefined) setNumPlaca(data.numPlaca as string)
+    if (data.nomResp !== undefined) setNomResp(data.nomResp as string)
+    if (data.dias !== undefined) setDias(data.dias as DiaForm[])
+    if (data.pecas !== undefined) setPecas(data.pecas as PecaInfo[])
     if (data.ppvRevisado !== undefined) setPpvRevisado(data.ppvRevisado as boolean)
-    if (data.justificativaPecaExtra) setJustificativaPecaExtra(data.justificativaPecaExtra as string)
-    if (data.fotoHorimetro) setFotoHorimetro(data.fotoHorimetro as string)
-    if (data.fotoChassis) setFotoChassis(data.fotoChassis as string)
-    if (data.fotoFrente) setFotoFrente(data.fotoFrente as string)
-    if (data.fotoDireita) setFotoDireita(data.fotoDireita as string)
-    if (data.fotoEsquerda) setFotoEsquerda(data.fotoEsquerda as string)
-    if (data.fotoTraseira) setFotoTraseira(data.fotoTraseira as string)
-    if (data.fotoVolante) setFotoVolante(data.fotoVolante as string)
-    if (data.fotoFalha1) setFotoFalha1(data.fotoFalha1 as string)
-    if (data.fotoFalha2) setFotoFalha2(data.fotoFalha2 as string)
-    if (data.fotoFalha3) setFotoFalha3(data.fotoFalha3 as string)
-    if (data.fotoFalha4) setFotoFalha4(data.fotoFalha4 as string)
-    if (data.fotoPecaNova1) setFotoPecaNova1(data.fotoPecaNova1 as string)
-    if (data.fotoPecaNova2) setFotoPecaNova2(data.fotoPecaNova2 as string)
-    if (data.fotoPecaInstalada1) setFotoPecaInstalada1(data.fotoPecaInstalada1 as string)
-    if (data.fotoPecaInstalada2) setFotoPecaInstalada2(data.fotoPecaInstalada2 as string)
-    if (data.assCliente) setAssCliente(data.assCliente as string)
-    if (data.assTecnico) setAssTecnico(data.assTecnico as string)
+    if (data.justificativaPecaExtra !== undefined) setJustificativaPecaExtra(data.justificativaPecaExtra as string)
+    if (data.fotoHorimetro !== undefined) setFotoHorimetro(data.fotoHorimetro as string)
+    if (data.fotoChassis !== undefined) setFotoChassis(data.fotoChassis as string)
+    if (data.fotoFrente !== undefined) setFotoFrente(data.fotoFrente as string)
+    if (data.fotoDireita !== undefined) setFotoDireita(data.fotoDireita as string)
+    if (data.fotoEsquerda !== undefined) setFotoEsquerda(data.fotoEsquerda as string)
+    if (data.fotoTraseira !== undefined) setFotoTraseira(data.fotoTraseira as string)
+    if (data.fotoVolante !== undefined) setFotoVolante(data.fotoVolante as string)
+    if (data.fotoFalha1 !== undefined) setFotoFalha1(data.fotoFalha1 as string)
+    if (data.fotoFalha2 !== undefined) setFotoFalha2(data.fotoFalha2 as string)
+    if (data.fotoFalha3 !== undefined) setFotoFalha3(data.fotoFalha3 as string)
+    if (data.fotoFalha4 !== undefined) setFotoFalha4(data.fotoFalha4 as string)
+    if (data.fotoPecaNova1 !== undefined) setFotoPecaNova1(data.fotoPecaNova1 as string)
+    if (data.fotoPecaNova2 !== undefined) setFotoPecaNova2(data.fotoPecaNova2 as string)
+    if (data.fotoPecaInstalada1 !== undefined) setFotoPecaInstalada1(data.fotoPecaInstalada1 as string)
+    if (data.fotoPecaInstalada2 !== undefined) setFotoPecaInstalada2(data.fotoPecaInstalada2 as string)
+    if (data.assCliente !== undefined) setAssCliente(data.assCliente as string)
+    if (data.assTecnico !== undefined) setAssTecnico(data.assTecnico as string)
   }, [])
 
-  const { clear: clearBackup } = useFormBackup(`os-preencher-${id}`, getFormData, setFormData)
+  const { restore: restoreBackup, clear: clearBackup, saveNow } = useFormBackup(`os-preencher-${id}`, getFormData, setFormData)
+
+  // Restaurar backup DEPOIS que os dados do Supabase carregaram
+  // Isso garante que edições locais do técnico sobrescrevem dados do servidor
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!loading && !restoredRef.current) {
+      restoredRef.current = true
+      restoreBackup()
+    }
+  }, [loading, restoreBackup])
 
   const uploadFoto = async (file: File, campo: string): Promise<string> => {
     const ext = file.name.split('.').pop() || 'jpg'
