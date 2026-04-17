@@ -534,17 +534,25 @@ export default function OSDetalhe({ params }: { params: Promise<{ id: string }> 
 
       {/* Fill/edit button */}
       {jaEnviada ? (
-        <div style={{
-          background: '#D1FAE5', borderRadius: 16, padding: '20px 18px',
+        <Link href={`/os/${os.Id_Ordem}/preencher`} style={{
           display: 'flex', alignItems: 'center', gap: 14,
-          border: '2px solid #6EE7B7',
+          background: '#D97706', color: '#fff', borderRadius: 16, padding: '22px 20px',
+          textDecoration: 'none',
+          boxShadow: '0 6px 20px rgba(217,119,6,0.3)',
         }}>
-          <CheckCircle size={28} color="#059669" />
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#059669' }}>OS já enviada</div>
-            <div style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>Esta OS técnica já foi preenchida e enviada.</div>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14,
+            background: 'rgba(255,255,255,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <ClipboardEdit size={26} />
           </div>
-        </div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>Editar OS Enviada</div>
+            <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>Toque para corrigir e reenviar o relatório</div>
+          </div>
+        </Link>
       ) : !horariosRegistrados ? (
         <div style={{
           background: '#F3F4F6', borderRadius: 16, padding: '20px 18px',

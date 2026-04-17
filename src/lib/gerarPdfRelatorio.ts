@@ -321,7 +321,7 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
     doc.rect(marginL, y, contentW, 6, 'F')
     doc.setFontSize(7)
     doc.setTextColor(AZUL_ESCURO)
-    const pCols = [0, 18, 100, 118, 140]
+    const pCols = [0, 30, 110, 125, 148]
     const pHeaders = ['Código', 'Descrição', 'Qtd', 'Devolvida', 'Origem']
     pHeaders.forEach((h, i) => doc.text(h, marginL + pCols[i] + 2, y + 4))
     y += 7
@@ -330,17 +330,22 @@ export async function gerarPdfRelatorio(dados: DadosRelatorio) {
     doc.setTextColor(PRETO)
     for (const peca of dados.pecas) {
       if (peca.naoUsada) continue
-      checkNewPage(8)
-      doc.text(peca.codigo || '-', marginL + pCols[0] + 2, y + 4)
-      const descLines = doc.splitTextToSize(peca.descricao, 78)
-      doc.text(descLines[0] || '-', marginL + pCols[1] + 2, y + 4)
+      const codeLines = doc.splitTextToSize(peca.codigo || '-', pCols[1] - pCols[0] - 3)
+      const descLines = doc.splitTextToSize(peca.descricao || '-', pCols[2] - pCols[1] - 3)
+      const rowLines = Math.max(codeLines.length, descLines.length)
+      checkNewPage(4 + rowLines * 3.5)
+      doc.text(codeLines, marginL + pCols[0] + 2, y + 4)
+      doc.text(descLines, marginL + pCols[1] + 2, y + 4)
       doc.text(peca.qtdUsada || '-', marginL + pCols[2] + 2, y + 4)
-      doc.text(peca.devolvida ? `Sim (${peca.qtdDevolvida})` : 'Não', marginL + pCols[3] + 2, y + 4)
+      const devolvido = peca.devolvida === true
+      const devText = devolvido ? `Sim (${peca.qtdDevolvida || '0'})` : 'Não'
+      doc.text(devText, marginL + pCols[3] + 2, y + 4)
       doc.text(peca.origem === 'ppv' ? 'PPV' : 'Manual', marginL + pCols[4] + 2, y + 4)
+      const rowH = 4 + rowLines * 3.5
       doc.setDrawColor('#E5E7EB')
       doc.setLineWidth(0.2)
-      doc.line(marginL, y + 6, pageW - marginR, y + 6)
-      y += 7
+      doc.line(marginL, y + rowH, pageW - marginR, y + rowH)
+      y += rowH + 1
     }
     y += 4
   }
